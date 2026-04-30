@@ -1,0 +1,718 @@
+/* -- 忘備録 --*/
+/*　paddingの並び  上右下左 */
+/* vh ビュー高さの 1/100 */
+/* vw ビュー幅の 1/100 */
+
+/*基準を1rem=10pxに設定*/
+html {
+    font-size: 62.5%;
+}
+
+/*最小値:1.1rem → 可変（0.9rem + 0.625vw（画面幅320px:2px, 800px:5px, 1200px:7.5px））→ 最大値:1.6rem*/
+.font-size-S {
+    font-size: clamp(1.1rem, calc(0.9rem + 0.625vw), 1.6rem);
+}
+
+/*最小値:1.2rem → 可変（1rem + 0.625vw（画面幅320px:2px, 800px:5px, 1200px:7.5px））→ 最大値:1.7rem*/
+.font-size-M {
+    font-size: clamp(1.2rem, calc(1rem + 0.625vw), 1.7rem);
+}
+
+/*最小値:1.6rem → 可変（2.2rem + 0.625vw（画面幅320px:2px, 800px:5px, 1200px:7.5px））→ 最大値:2.9rem*/
+.font-size-L {
+    font-size: clamp(2.4rem, calc(2.2rem + 0.625vw), 2.9rem);
+}
+
+/*最小値:1.6rem → 可変（2.2rem + 0.625vw（画面幅320px:2px, 800px:5px, 1200px:7.5px））→ 最大値:2.9rem*/
+.font-size-LL {
+    font-size: clamp(2.9rem, calc(3.5rem + 0.625vw), 4.2rem);
+}
+
+.frame-container {
+	display: flex;
+	flex-wrap: wrap;
+}
+
+/* ------------- h1ヘッダーなどをバーで使用するために使用する -------------- */
+.no-space {
+	font-size: 1.2em;
+	margin: 0;
+	padding: 0;
+  }
+
+#topBar{
+  font-size: 1.2em;
+  background: linear-gradient(90deg, #FFD700, #FFA500);
+  padding: 6px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;   /* ← space-between を使わない */
+  gap: 16px;
+  color: #000;
+  white-space: nowrap;           /* 1行固定 */
+}
+
+#topBar .title-wrapper{
+  flex: 1 1 auto;                /* 左は可変 */
+  min-width: 0;                  /* ← これが無いと省略記号が効かない */
+  overflow: hidden;
+  text-overflow: ellipsis;       /* 収まらなければ … */
+  font-weight: 800;
+  font-size: clamp(18px, 2.2vw, 26px);
+  line-height: 1.2;
+}
+
+#maincontents{
+	width: 90%;
+	margin-left: auto;
+	margin-right: auto;
+	margin-bottom: 5vh;
+	font-size: 1.5em;
+	word-wrap: break-word;
+}
+
+/* ログイン関連のタイトル不要画面のコンテンツ */
+#logincontents{
+	width: 80%;
+	margin-left: auto;
+	margin-right: auto;
+	margin-top: 5vh;
+	margin-bottom: 5vh;
+	font-size: 1.5em;
+	word-wrap: break-word;
+}
+
+/* ------------- 見出し -------------- */
+.midashi{
+    color: #468af0f1;
+	font-size: large;
+    font-weight:bold;
+    text-align: center;
+}
+
+
+.title-label {
+	color: #000099;
+	margin-top: 3px;
+	white-space: normal;
+	line-height: 1.5em;
+}
+
+@media screen and (min-width: 1025px) {
+	/* 1025px以上の画面サイズで適用されるスタイル */
+	
+	#topBar{
+		background-color:#468af0f1 ;
+	}
+
+	.midashi{
+		color: #468af0f1;
+	}
+
+	.right-container {
+		background-color: #ffffff;
+		display:flex;
+		flex-flow: column;
+		width: 30%;
+		padding: 1vw;
+	}
+
+	.nav-image {
+		display: none;
+	}
+	
+	.nav-span {
+		display: flex;
+		color: white;
+		font-size: large;
+	}
+
+}
+
+@media screen and (min-width: 769px) and (max-width: 1024px){
+	/* 769px~1024pxの画面サイズで適用されるスタイル */
+	
+	#topBar{
+		background-color:#f19408 ;
+	}
+	
+	.midashi{
+		color: #f19408 ;
+	}
+
+	.right-container {
+		display: none;
+	}
+
+	.nav-image {
+		display: none;
+	}
+	
+	.nav-span {
+		display: flex;
+		color: white;
+		font-size: large;
+		text-decoration: none;
+	}
+
+	.title-label {
+		line-height: 2em;
+	}
+
+}
+		
+/* 以下はメディアクエリ。参照媒体事に使用するスタイルを切り分ける */
+@media screen and (max-width: 768px){
+	/* 768px以下の画面サイズで適用されるスタイル */
+
+	#topBar{
+		background-color: rgb(228, 51, 51) ;
+	}
+
+	.midashi{
+		color: rgb(228, 51, 51);
+	}
+
+	.right-container {
+		display: none;
+	}
+	
+	.nav-image {
+		display: block;
+	}
+
+	.nav-span {
+		display: none;
+	}
+
+	.title-label {
+		line-height: 2.5em;
+		font-size: large;
+	}
+}
+
+
+body {
+	font-family: "Noto Sans JP", "遊ゴシック Medium", "遊ゴシック体", "Yu Gothic Medium", YuGothic, "ヒラギノ角ゴ ProN", "Hiragino Kaku Gothic ProN", "メイリオ", Meiryo, "ＭＳ Ｐゴシック", "MS PGothic", sans-serif;
+	color: #333333;
+	background-color: #fafafa;
+    margin: 0;
+    padding: 0;
+}
+
+/* 問題出題時の黒背景用 */
+#blackBody {
+	background: #1b1b2f;
+	color: #fff;
+	margin: 0;
+	padding: 0;
+}
+
+.space8{
+	margin-right : 8px;
+}
+
+.space4b{
+	margin-bottom : 4px;
+}
+
+.bar-line{
+	display: flex;
+	justify-content:  space-around;
+	/* width: 70%; */
+	margin: 0;
+	padding: 0;
+}
+
+.bar-line li {
+	list-style: none;
+}
+
+.ellipsis {
+	white-space: nowrap;        /* テキストを1行に制限 */
+	overflow: hidden;          /* 溢れた部分を隠す */
+	text-overflow: ellipsis;   /* 溢れた部分を ... にする */
+	padding-left: 3vw;
+}
+
+.restart_icon {
+    /* font-family: "Font Awesome 5 Free"; */
+    background: transparent; /* 背景を透明に */
+    color: white;
+    border: none;
+    font-size: 24px; /* ボタン全体の基準サイズ */
+    cursor: pointer;
+    display: inline-flex;
+    flex-direction: column; /* アイコンとテキストを縦に配置 */
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+
+.icon-text {
+    font-size: 8px; 		/* 文字サイズを小さくする */
+	margin-top: -1px;
+	white-space: nowrap;        /* テキストを1行に制限 */
+	overflow: hidden;          /* 溢れた部分を隠す */
+	text-overflow: ellipsis;   /* 溢れた部分を ... にする */
+}
+
+/* 大きくセンターに表示する画像ファイル */
+img.main-visual {
+	display: block; /* もしくは display:block; */
+	width: 100%;
+	height: auto;
+	margin-top: 16px;
+	border-radius: 12px;
+}
+
+/* 解説用リンクに表示する画像ファイル */
+img.link-visual {
+	display: block; /* もしくは display:block; */
+	width: 40%;
+	height: auto;
+	margin-top: 4px;
+	border-radius: 12px;
+}
+
+/* 本文 */
+.honbun{
+	display: flex;
+	align-items: center;
+    font-size:large;
+	padding-bottom: 1.5vh;
+}
+
+/* 前書き */
+.maegaki{
+  color:black;
+  line-height :1.4em;
+  font-size :1em;
+  padding-top:14px ;
+  padding-bottom:10px ;
+  /* background-color:#ffffff ; */
+  white-space: normal;
+}
+
+/* 章タイトル */
+.caption{
+	color: #000099;
+	line-height :1.2em;
+	margin-top: 1vh ;
+	margin-bottom: 1vh ;
+	white-space: normal;
+  }
+  
+/* ─────────────────────────────
+   親コンテナ
+───────────────────────────── */
+.kaisetulink {
+  line-height: 1.2em;
+  font-size: 0.8em;
+  /* padding: 0 8px 8px; */
+}
+
+/* ─────────────────────────────
+   各ユニット：左右並びの角丸ボックス
+───────────────────────────── */
+.kaisetulink-unit {
+  display: flex;
+  background: #fff;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 8px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* ─────────────────────────────
+   左右それぞれを等分 & 中央寄せ
+───────────────────────────── */
+.kaisetulink-unit > .link-label,
+.kaisetulink-unit > .preview-image {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ─────────────────────────────
+   リンクラベル側
+───────────────────────────── */
+.kaisetulink-unit > .link-label {
+  background: #fff;
+  padding: 12px;
+  border-right: 1px solid #eee;
+}
+.kaisetulink-unit > .link-label a {
+  color: #007bff;
+  text-decoration: none;
+  /* 必要に応じて font-weight や font-size を追加 */
+}
+
+/* ─────────────────────────────
+   画像側（余白ゼロ）
+───────────────────────────── */
+.kaisetulink-unit > .preview-image {
+  background: #f9f9f9; /* いらなければ #fff に */
+  padding: 0;          /* 余白をなくしてギリギリ表示 */
+}
+
+/* 画像そのもののリセット */
+.kaisetulink-unit .link-visual {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+  margin: 0;
+}
+
+
+.mondai{
+  color:#666666;
+  line-height :1.2em;
+  font-weight: 600;
+  padding: 2vh 3vh 0 1vw;		/* 上 | 右 | 下 | 左 */
+}
+
+/* トップ画面の見出し用の修飾 */
+.boxB {
+  position: relative;
+  background: #ffd98a;
+  margin-top: 3vh;
+  /* width: 90%; */
+  padding: 2px 5px 2px 50px;
+  font-size: 120%;
+  font-weight: bold;
+  color: #474747;
+  border-radius: 0 10px 10px 0;
+}
+
+/* トップ画面の見出しのアイコン修飾 */
+.boxB:before {
+  font-family: "Font Awesome 5 Free";
+  display: inline-block;
+  line-height: 40px;
+  position: absolute;
+  /* position: relative; */
+  padding: 0em;
+  margin-left: 1em;
+  color: white;
+  font-weight: 900;
+  width: 40px;
+  text-align: center;
+  height: 40px;
+  line-height: 40px;
+  left: -1.35em;
+  top: 50%;
+  -webkit-transform: translateY(-50%);
+  transform: translateY(-50%);
+  border: solid 3px white; 
+  border-radius: 50%;
+}
+
+/* 音楽 */
+.boxB.music {
+  background: #89ffff; /* 薄い紫 (柔らかな印象) */
+}
+.boxB.music:before {
+  content: "\f001"; /* 音符のアイコン */
+  font-family: "Font Awesome 5 Free";
+  background: #89c4ff; /* 少し濃い紫 */
+  color: white;
+}
+
+/* カルチャー */
+.boxB.culture {
+  background: #FF748B; /* 薄いクリーム色 */
+}
+.boxB.culture:before {
+  content: "\f02d"; /* 本のアイコン */
+  font-family: "Font Awesome 5 Free";
+  background: #F72C5B; /* 少し濃いベージュ */
+  color: white;
+}
+
+/* 日本 */
+.boxB.japan {
+  background: #E4F1AC;
+}
+.boxB.japan:before {
+  content: "\f4d8"; /* 桜のアイコン */
+  font-family: "Font Awesome 5 Free";
+  background: #A7D477;
+  color: white;
+}
+
+/* テクノロジー */
+.boxB.technology {
+  background: #b2d8ff; /* 薄い青 */
+}
+.boxB.technology:before {
+  content: "\f109"; /* デスクトップPCのアイコン */
+  font-family: "Font Awesome 5 Free";
+  background: #b2b2ff; /* 少し濃い水色 */
+  color: white;
+}
+
+/* 自然 */
+.boxB.nature {
+  background: #e2ffc6; /* 薄い緑 */
+}
+.boxB.nature:before {
+  content: "\f06c"; /* 葉っぱのアイコン */
+  font-family: "Font Awesome 5 Free";
+  background: #89ffc4; /* 柔らかい緑 */
+  color: white;
+}
+
+/* 世界 */
+.boxB.world {
+  background: #a1c2ff; /* 薄い青紫 */
+}
+.boxB.world:before {
+  content: "\f0ac"; /* 地球のアイコン */
+  font-family: "Font Awesome 5 Free";
+  background: #adadff; /* 少し濃い青紫 */
+  color: white;
+}
+
+/* フォームを囲むボックス */
+.box-form {
+	margin-top: 3vh;
+}
+
+/* 入力欄のタイトル */
+.input-form-label {
+	color: #000099;
+	margin-top: 3px;
+	white-space: normal;
+}
+
+/* 前問題の解凍表示 */
+.zenKaitou{
+	white-space: normal;
+	font-weight: 900;
+	text-align: center;
+}
+
+/* 前回の問題を表示するエリア */
+.zenMondai{
+	font-size: 0.9em;
+	color:black;
+	padding: 1.0em;
+	background-color:#eeeeee ;
+	white-space: normal;
+}
+
+.zen-mondai-you {
+	font-size: 0.9em;
+	padding: 0vw 0.5vw 0vw 0.5vw;
+	color : red;
+	font-weight:bold;
+}
+
+.zenKaisetu{
+	font-size: 0.9em;
+	border-style:solid ;
+	border-width:1.0vh;
+	border-color:#ffc22a ;
+	border-radius: 10px;
+	padding:1.2vw ;
+	background-color:#fffed6 ;
+	white-space: normal; 
+	line-height :1.2em;
+}
+
+.comment{
+    text-align: left;
+}
+
+/* プロフィール */
+.prof{
+	color:red;
+	line-height :1.3em;
+	font-size: 0.8em;
+	margin-bottom: 10vh;
+	white-space: normal;
+}
+
+.prof img{
+	margin-top: 5px;
+}
+
+
+/* 注意書き */
+.alert{
+	color:red;
+	line-height :1.3em;
+	font-size: 0.8em;
+	white-space: normal;
+}
+
+/* 先頭へジャンプ */
+.jump{
+	text-align: right;
+}
+
+/* メールアイコン */
+.mail-img {
+	width: 202px;
+	height: 33px;
+	object-fit: scale-down;
+}
+
+.right-banner {
+
+	margin-top: 1vh;
+	margin-bottom: 1vh;
+	text-align: center;
+
+}
+
+/* 本文 */
+.bottom-banner{
+	margin-top: 3vh;
+	margin-bottom: 10vh;
+	font-size: 0.8em;
+}
+
+.signature {
+	margin: auto;
+}
+
+/* ボタン */
+a.btn--orange {
+	color: #fff;
+	background-color: #468af0f1;
+}
+
+a.btn--orange:hover {
+	color: #fff;
+	background: rgba(41, 122, 243, 0.94);
+}
+
+a.btn-c {
+	display: inline-block;    /* ← これを追加 */
+	text-decoration: none;
+	border-radius: 9999px;
+	/* 縁取りを追加 */
+	/* border: 2px solid #6098ff; */
+	position: relative;
+	padding: 0.4rem 2rem 0.6rem 2rem;
+	margin-top: 0.8rem;
+	margin-bottom: 0.8rem;
+	/* background: #6098ff; */
+	color: #fff;
+	font-size: 1.4rem;
+	transition: all 0.3s ease;
+}
+
+/* サムネイル画像のグリッドレイアウト */
+.thumbnail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); /* 自動調整で列を配置 */
+  gap: 10px;
+  max-width: 100%; /* 親要素の幅に収める */
+  margin: 0 auto; /* 中央揃え */
+  padding: 10px; /* 内側の余白 */
+  box-sizing: border-box; /* パディングを含めてサイズを計算 */
+}
+
+.thumbnail-item {
+  text-align: center;
+}
+
+.thumbnail {
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+}
+
+.thumbnail-title {
+  white-space: nowrap;        /* テキストを1行に制限 */
+  overflow: hidden;          /* 溢れた部分を隠す */
+  text-overflow: ellipsis;   /* 溢れた部分を ... にする */
+  font-size: 12px;
+  color: #333;
+  word-wrap: break-word;
+}
+
+/* 文字リンクのスタイル */
+.text-link {
+  font-size: 14px;
+  color: #007bff;
+  text-decoration: none;
+}
+
+.text-link:hover {
+  text-decoration: underline;
+}
+
+.password-field {
+    max-width: 400px;
+}
+.pw-input {
+    font-size: 1em;
+    padding: 6px;
+}
+
+/* 追加するCSS */
+.form-inline {
+	display: flex;
+	align-items: center;
+	gap: 1rem;
+	/* ラベルとセレクトの間隔 */
+	margin-bottom: 1em;
+	margin-left: 1vw;
+}
+
+.form-inline label {
+	margin-right: 0.5rem;
+	/* font-weight: bold; */
+}
+
+.form-inline select {
+	padding: 0.3em;
+	font-size: 1em;
+}
+
+.message {
+	color: green;
+	margin: 10px 0;
+}
+
+.function-area {
+	margin-top: 30px;
+	padding: 10px;
+	border: 1px solid #aaa;
+	background: #f9f9f9;
+}
+
+/* Toast処理 */
+#toast-container{
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+.toast{
+  background: rgba(28, 28, 40, .95);
+  color: #fff;
+  padding: 10px 14px;
+  border-radius: 10px;
+  box-shadow: 0 6px 18px rgba(0,0,0,.25);
+  font-size: .95rem;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity .18s ease, transform .18s ease;
+}
+.toast.show{ opacity: 1; transform: translateY(0); }
+.toast.hide{ opacity: 0; transform: translateY(10px); }
+

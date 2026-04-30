@@ -1,0 +1,48 @@
+<svg viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg" aria-label="太陽" role="img">
+  <defs>
+    <radialGradient id="sunGrad" cx="50%" cy="50%">
+      <stop offset="0%"  stop-color="#fff59d"/>
+      <stop offset="60%" stop-color="#ffb74d"/>
+      <stop offset="100%" stop-color="#ff7043"/>
+    </radialGradient>
+
+    <filter id="sunGlow">
+      <feGaussianBlur stdDeviation="8" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="flareGlow">
+      <feGaussianBlur stdDeviation="2" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- 背面フレア（SMILでちらつき） -->
+  <g stroke-linecap="round" stroke="#ffd54f" stroke-width="4" fill="none"
+     filter="url(#flareGlow)" opacity="0.9">
+    <path d="M80,26 C96,28 112,40 118,56">
+      <animate attributeName="opacity" values="0.5;1;0.6;1" dur="5.5s" repeatCount="indefinite"/>
+    </path>
+    <path d="M80,26 C96,28 112,40 118,56" transform="rotate(40 80 80)">
+      <animate attributeName="opacity" values="0.4;1;0.7;1" dur="6.2s" begin=".3s" repeatCount="indefinite"/>
+    </path>
+    <path d="M80,26 C96,28 112,40 118,56" transform="rotate(80 80 80)">
+      <animate attributeName="opacity" values="0.5;1;0.5;1" dur="4.8s" begin=".8s" repeatCount="indefinite"/>
+    </path>
+    <path d="M80,26 C96,28 112,40 118,56" transform="rotate(120 80 80)">
+      <animate attributeName="opacity" values="0.6;1;0.6;1" dur="6.8s" begin="1.1s" repeatCount="indefinite"/>
+    </path>
+    <path d="M80,26 C96,28 112,40 118,56" transform="rotate(160 80 80)">
+      <animate attributeName="opacity" values="0.5;1;0.7;1" dur="5.0s" begin="1.6s" repeatCount="indefinite"/>
+    </path>
+    <path d="M80,26 C96,28 112,40 118,56" transform="rotate(200 80 80)">
+      <animate attributeName="opacity" values="0.4;1;0.6;1" dur="5.8s" begin="2.0s" repeatCount="indefinite"/>
+    </path>
+  </g>
+
+  <!-- 本体 -->
+  <circle cx="80" cy="80" r="34" fill="url(#sunGrad)"/>
+
+  <!-- コロナ -->
+  <circle cx="80" cy="80" r="42" fill="none" stroke="#ffb74d" stroke-width="26"
+          opacity=".35" filter="url(#sunGlow)"/>
+</svg>

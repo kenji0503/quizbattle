@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="84" height="84" aria-label="木星">
+    <defs>
+      <radialGradient id="jShade" cx="35%" cy="30%">
+        <stop offset="0%"  stop-color="#fff3e5"/>
+        <stop offset="45%" stop-color="#ead7b9"/>
+        <stop offset="100%" stop-color="#c9a684"/>
+      </radialGradient>
+      <clipPath id="jClip"><circle cx="80" cy="80" r="40"/></clipPath>
+    </defs>
+    <circle cx="80" cy="80" r="40" fill="url(#jShade)" stroke="#f1e6d4" stroke-width="2"/>
+    <g clip-path="url(#jClip)" opacity="0.95">
+      <rect x="40" y="40" width="80" height="80" fill="#d3b291"/>
+      <rect x="40" y="52" width="80" height="6"  fill="#e8d1b7"/>
+      <rect x="40" y="70" width="80" height="7"  fill="#ead8c3"/>
+      <rect x="40" y="92" width="80" height="6"  fill="#ead8c3"/>
+      <rect x="40" y="60" width="80" height="6"  fill="#b98f6c"/>
+      <rect x="40" y="82" width="80" height="7"  fill="#b48763"/>
+      <rect x="40" y="104" width="80" height="6" fill="#b48763"/>
+      <ellipse cx="80" cy="86" rx="44" ry="6.5" fill="#c79d79" opacity=".35"/>
+      <ellipse cx="80" cy="66" rx="46" ry="6.5" fill="#cfa784" opacity=".28"/>
+      <g transform="translate(108,94)">
+        <ellipse rx="10.5" ry="6.5" fill="#d78858" opacity=".9"/>
+        <ellipse rx="8" ry="4.5" fill="#f1a678" opacity=".85"/>
+        <ellipse rx="4.5" ry="2.2" fill="#ffe7d6" opacity=".6"/>
+      </g>
+    </g>
+    <path d="M48,64 C62,50 94,46 108,52" fill="none" stroke="#ffffff" stroke-opacity=".35" stroke-width="4" stroke-linecap="round"/>
+  </svg>

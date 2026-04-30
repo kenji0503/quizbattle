@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="66" height="66" aria-label="人工衛星">
+        <rect x="92" y="80" width="16" height="40" rx="3" fill="#9ec7ff" stroke="#dff1ff" stroke-width="2"/>
+        <rect x="40" y="92" width="50" height="16" rx="3" fill="#b6d4ff" stroke="#e7f2ff" stroke-width="2"/>
+        <rect x="110" y="92" width="50" height="16" rx="3" fill="#b6d4ff" stroke="#e7f2ff" stroke-width="2"/>
+      </svg>

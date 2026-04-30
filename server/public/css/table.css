@@ -1,0 +1,95 @@
+/***
+	ランキング表のスタイルシート
+***/
+
+table {
+	border-collapse: collapse;
+	table-layout: fixed;
+	width: 100%;
+	margin-top: 20px;
+}
+
+th,
+td {
+	border: 1px solid #ccc;
+	padding: 3px 5px;
+}
+
+th {
+	background-color: #f0f0f0;
+}
+
+/* 番号 */
+.row-num {
+	width: 3%;
+	text-align: center;
+}
+
+/*  日付  */
+.row-date {
+  	width: 8%;
+  	text-overflow: ellipsis;
+  	white-space: nowrap;	/* 折り返しを禁止 */
+  	overflow: hidden;
+	text-align: center;
+}
+
+/* 出題画面 */
+
+
+
+/* ユーザ一覧 */
+
+/* アカウント */
+.row-account {
+  	width: 30%;
+  	text-overflow: ellipsis;
+  	white-space: nowrap;	/* 折り返しを禁止 */
+  	overflow: hidden;
+}
+
+/* 成績一覧 */
+
+/* 日時 */
+.row-datetime {
+  	width: 8%;
+	text-align: center;
+}
+
+/* 操作 */
+.row-ope {
+  	width: 6%;
+	text-align: center;
+}
+
+/*  センター表示 */
+.row-center {
+	text-align: center;
+}
+
+/*  幅を広く */
+.row-title {
+	width: 15%;
+}
+
+/*  幅を広く */
+.row-mondai {
+	width: 30%;
+}
+
+/*  幅を広く */
+.row-midashi {
+	width: 15%;
+}
+
+
+
+@media all and (max-width: 600px) {
+
+	.requestTable th:nth-child(4),		/* 日付 */
+	.requestTable td:nth-child(4)
+	{
+        display: none; /* 列を非表示にする */
+    }
+
+}

@@ -1,0 +1,25 @@
+<svg viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg" aria-label="土星" role="img">
+  <defs>
+    <radialGradient id="saturnGrad" cx="50%" cy="50%">
+      <stop offset="0%" stop-color="#ffd7a8"/>
+      <stop offset="70%" stop-color="#ff9e6e"/>
+      <stop offset="100%" stop-color="#c464ff"/>
+    </radialGradient>
+    <!-- 前面に出す“下半分だけ”通すクリップ -->
+    <clipPath id="saturnRingFront">
+      <rect x="0" y="88" width="160" height="72"/>
+    </clipPath>
+  </defs>
+
+  <!-- 背面リング（少し薄め） -->
+  <ellipse cx="80" cy="88" rx="68" ry="14"
+           fill="none" stroke="rgba(255,255,255,.45)" stroke-width="4" />
+
+  <!-- 惑星本体 -->
+  <circle cx="80" cy="80" r="36" fill="url(#saturnGrad)"/>
+
+  <!-- 前面リング（下半分だけ表示） -->
+  <ellipse cx="80" cy="88" rx="68" ry="14"
+           fill="none" stroke="rgba(255,255,255,.9)" stroke-width="4"
+           clip-path="url(#saturnRingFront)" />
+</svg>

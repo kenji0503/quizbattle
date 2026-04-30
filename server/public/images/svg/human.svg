@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 160 160" width="64" height="64"
+     aria-label="人間（宇宙服・マンガ調）" role="img">
+  <defs>
+    <linearGradient id="visorGrad" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0"  stop-color="#eaf4ff"/>
+      <stop offset="1"  stop-color="#9ec7ff"/>
+    </linearGradient>
+    <linearGradient id="suitGrad" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#dfe7ff"/>
+      <stop offset="1" stop-color="#c5d2ff"/>
+    </linearGradient>
+  </defs>
+
+  <!-- バックパック -->
+  <rect x="48" y="86" width="14" height="30" rx="6" fill="#b9c7fa" opacity=".95"/>
+  <path d="M60,96 C64,86 86,86 92,68" fill="none" stroke="#b9c7fa" stroke-width="3" stroke-linecap="round" opacity=".8"/>
+
+  <!-- ヘルメット -->
+  <circle cx="80" cy="58" r="34" fill="white" opacity=".08"/>
+  <circle cx="80" cy="58" r="32" fill="none" stroke="#e7f2ff" stroke-width="3"/>
+  <rect x="54" y="42" width="52" height="30" rx="15" fill="url(#visorGrad)" stroke="#dff1ff" stroke-width="2"/>
+
+  <!-- 顔 -->
+  <circle cx="80" cy="58" r="15" fill="#ffdcb5"/>
+  <!-- 目（各要素内にアニメ） -->
+  <ellipse cx="73" cy="58" rx="4" ry="7" fill="#222">
+    <animate attributeName="ry" values="7;1;7" dur="5.2s" repeatCount="indefinite" begin="1.1s"/>
+  </ellipse>
+  <ellipse cx="87" cy="58" rx="4" ry="7" fill="#222">
+    <animate attributeName="ry" values="7;1;7" dur="5.2s" repeatCount="indefinite" begin="1.2s"/>
+  </ellipse>
+  <circle cx="72" cy="55" r="1.3" fill="white" opacity=".9"/>
+  <circle cx="86" cy="55" r="1.3" fill="white" opacity=".9"/>
+  <circle cx="70" cy="63" r="3.6" fill="#ffb3b3" opacity=".7"/>
+  <circle cx="90" cy="63" r="3.6" fill="#ffb3b3" opacity=".7"/>
+  <path d="M73,67 Q80,70 87,67" fill="none" stroke="#a0522d" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- バイザーハイライト -->
+  <path d="M58,50 Q72,40 92,44" fill="none" stroke="white" stroke-width="3" opacity=".35" stroke-linecap="round"/>
+  <path d="M58,58 Q70,52 80,54" fill="none" stroke="white" stroke-width="2" opacity=".25" stroke-linecap="round"/>
+
+  <!-- スーツ -->
+  <rect x="56" y="82" width="48" height="38" rx="12" fill="url(#suitGrad)" stroke="#e7f2ff" stroke-width="2"/>
+  <rect x="66" y="88" width="28" height="10" rx="5" fill="#8bb1ff"/>
+  <circle cx="97" cy="93" r="2.2" fill="#ff7575"/>
+  <circle cx="62" cy="93" r="2.2" fill="#7effa1"/>
+  <rect x="44" y="88" width="16" height="10" rx="6" fill="#cbd8ff" stroke="#e7f2ff" stroke-width="2"/>
+  <rect x="100" y="88" width="16" height="10" rx="6" fill="#cbd8ff" stroke="#e7f2ff" stroke-width="2"/>
+  <circle cx="44" cy="93" r="5" fill="#ffffff" opacity=".9"/>
+  <circle cx="116" cy="93" r="5" fill="#ffffff" opacity=".9"/>
+  <rect x="56" y="106" width="48" height="6" rx="3" fill="#9db2ff" opacity=".8"/>
+
+  <!-- 脚 -->
+  <rect x="60" y="114" width="16" height="18" rx="6" fill="#cbd8ff" stroke="#e7f2ff" stroke-width="2"/>
+  <rect x="84" y="114" width="16" height="18" rx="6" fill="#cbd8ff" stroke="#e7f2ff" stroke-width="2"/>
+  <rect x="56" y="130" width="24" height="6" rx="3" fill="#6c7bd9" opacity=".9"/>
+  <rect x="80" y="130" width="24" height="6" rx="3" fill="#6c7bd9" opacity=".9"/>
+</svg>

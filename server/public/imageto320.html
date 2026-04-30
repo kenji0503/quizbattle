@@ -1,0 +1,20 @@
+<!doctype html><meta charset="utf-8">
+<body style="font:14px system-ui;display:grid;place-items:center;height:100vh">]
+    <h3>256x256の画像を4x4に分割して320x320にリサイズするツール</h3>
+  <input type="file" accept="image/png" id="f"><button id="go">作る</button>
+  <script>
+  const GRID=4,SRC=256,DST=80,OUT=GRID*DST;
+  const can=document.createElement('canvas'); can.width=OUT; can.height=OUT;
+  const ctx=can.getContext('2d'); ctx.imageSmoothingQuality='high';
+  let img=new Image();
+  f.onchange=()=>{const fr=new FileReader(); fr.onload=()=>{img.onload=()=>alert('読み込みOK'); img.src=fr.result}; fr.readAsDataURL(f.files[0]);};
+  go.onclick=()=>{
+    if(!img.src) return alert('画像を選んでください');
+    ctx.clearRect(0,0,OUT,OUT);
+    for(let y=0;y<GRID;y++)for(let x=0;x<GRID;x++){
+      ctx.drawImage(img, x*SRC, y*SRC, SRC, SRC, x*DST, y*DST, DST, DST);
+    }
+    const a=document.createElement('a'); a.download='output_320x320.png'; a.href=can.toDataURL('image/png'); a.click();
+  };
+  </script>
+</body>

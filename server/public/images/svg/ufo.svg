@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 200" width="72" height="72" aria-label="空飛ぶ円盤">
+        <ellipse cx="120" cy="120" rx="70" ry="18" fill="#6de0ff" opacity=".35"/>
+        <ellipse cx="120" cy="94" rx="60" ry="18" fill="#8be3ff" stroke="#dff9ff" stroke-width="2"/>
+        <circle cx="120" cy="80" r="16" fill="#c7fffc" stroke="#eaffff"/>
+        <circle cx="112" cy="78" r="4"/><circle cx="128" cy="78" r="4"/>
+      </svg>

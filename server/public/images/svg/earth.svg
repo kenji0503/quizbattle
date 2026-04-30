@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 160 160" width="74" height="74"
+     aria-label="地球" role="img">
+  <defs>
+    <!-- 海のグラデーション（中心を少し明るく） -->
+    <radialGradient id="oceanGrad" cx="50%" cy="45%">
+      <stop offset="0%"  stop-color="#8fd3ff"/>
+      <stop offset="65%" stop-color="#5fb6ff"/>
+      <stop offset="100%" stop-color="#3a8fe0"/>
+    </radialGradient>
+    <!-- 大気のやわらかい光 -->
+    <filter id="atmo" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="5"/>
+    </filter>
+    <!-- 球面クリップ（陸や雲を球内に限定） -->
+    <clipPath id="globeClip">
+      <circle cx="80" cy="80" r="34"/>
+    </clipPath>
+  </defs>
+
+  <!-- うっすら外側の大気ハロ -->
+  <circle cx="80" cy="80" r="38" fill="#9bd8ff" opacity=".18" filter="url(#atmo)"/>
+
+  <!-- 本体（海） -->
+  <circle cx="80" cy="80" r="34" fill="url(#oceanGrad)" stroke="#dff7ff" stroke-width="1.2"/>
+
+  <!-- 経緯線（とても薄く） -->
+  <g clip-path="url(#globeClip)" stroke="rgba(255,255,255,.18)" fill="none" stroke-width="1">
+    <!-- 緯線 -->
+    <ellipse cx="80" cy="80" rx="32" ry="10"/>
+    <ellipse cx="80" cy="80" rx="28" ry="6"/>
+    <!-- 経線（縦は球面っぽく少し押し潰した楕円弧） -->
+    <path d="M80,46 C60,54 60,106 80,114"/>
+    <path d="M80,46 C100,54 100,106 80,114"/>
+  </g>
+
+  <!-- 陸地（やや黄緑寄り） -->
+  <g clip-path="url(#globeClip)" fill="#79e7b6" stroke="rgba(0,0,0,.06)" stroke-width=".8">
+    <!-- アメリカ大陸（概形） -->
+    <path d="M56,63
+             C50,68 49,76 54,81
+             C58,85 61,87 62,90
+             C63,94 61,98 57,100
+             C53,102 50,101 49,97
+             C48,92 50,86 52,82
+             C54,77 58,70 64,64
+             C66,62 62,60 56,63 Z"/>
+    <!-- ユーラシア〜アフリカ -->
+    <path d="M88,60
+             C95,58 104,60 109,66
+             C114,72 114,80 108,84
+             C103,87 99,88 95,87
+             C93,93 88,100 81,102
+             C77,103 73,101 73,97
+             C73,93 76,91 79,89
+             C85,85 87,79 87,74
+             C87,69 88,62 88,60 Z"/>
+    <!-- オセアニア付近 -->
+    <path d="M104,98
+             C108,96 112,98 113,101
+             C114,104 111,106 108,106
+             C105,106 102,102 104,98 Z"/>
+    <!-- 日本列島っぽい小片 -->
+    <path d="M101,74 C103,73 105,74 105,76 C105,78 103,79 101,78 C100,77 100,75 101,74 Z"/>
+    <path d="M103,80 C104,79 106,80 106,82 C106,83 104,84 103,83 C102,82 102,81 103,80 Z"/>
+  </g>
+
+  <!-- 雲（うすい白・半透明） -->
+  <g clip-path="url(#globeClip)" stroke="white" stroke-linecap="round" stroke-width="3" opacity=".22" fill="none">
+    <path d="M52,72 C64,69 96,69 108,72"/>
+    <path d="M48,88 C60,86 86,86 104,90"/>
+  </g>
+
+  <!-- ほんのりハイライト -->
+  <path d="M58,54 Q74,42 96,46" fill="none" stroke="white" stroke-width="2.4" opacity=".25" stroke-linecap="round"/>
+
+  <!-- 極域の氷（薄い白） -->
+  <ellipse cx="80" cy="48" rx="10" ry="4" fill="white" opacity=".18"/>
+</svg>

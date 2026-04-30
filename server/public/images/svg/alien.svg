@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="64" height="64"
+     aria-label="宇宙人" role="img">
+  <ellipse cx="80" cy="70" rx="30" ry="40" fill="#8affb8" stroke="#eafff1"/>
+  <ellipse cx="66" cy="70" rx="9" ry="12" fill="#092"/>
+  <ellipse cx="94" cy="70" rx="9" ry="12" fill="#092"/>
+  <path d="M70,96 Q80,104 90,96" stroke="#093" stroke-width="4" fill="none"/>
+  <line x1="70" y1="34" x2="62" y2="22" stroke="#9f9" stroke-width="3"/>
+  <line x1="90" y1="34" x2="98" y2="22" stroke="#9f9" stroke-width="3"/>
+</svg>

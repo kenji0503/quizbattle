@@ -1,0 +1,11 @@
+/* 共通。初期位置を明示、はみ出し防止 */
+.sprite {
+  width: 80px;
+  height: 80px;
+  background-image: url('images/sprite_test_grid_320x320.png'); /* 置き場所に合わせて変更 */
+  background-repeat: no-repeat;
+  background-position: 0 0;     /* 追加 */
+  background-size: 400% 400%;   /* そのままでもOK（後でJSでpxに上書き） */
+  image-rendering: auto;         /* ドット絵なら pixelated にしてOK */
+  overflow: hidden;              /* 回転時の縁ちらつき抑制 */
+}
