@@ -31,6 +31,12 @@ try {
     ");
     $stmt->execute([$bid, $gid, $uid, $name !== '' ? $name : ('Player#' . $uid)]);
 
+    battle_ws_publish(
+        ["lobby:{$bid}:{$gid}"],
+        'lobby.snapshot',
+        battle_collect_lobby_snapshot($pdo, $bid, $gid)
+    );
+
     echo json_encode(['ok' => true, 'ts' => (int)floor(microtime(true) * 1000)]);
 } catch (Throwable $e) {
     http_response_code(500);

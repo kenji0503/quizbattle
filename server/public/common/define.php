@@ -5,6 +5,10 @@ define('BATTLE_PHASE_QUESTION',  1); // 出題中
 define('BATTLE_PHASE_ANSWER',    2); // 正解表示中
 define('BATTLE_PHASE_FINISHED',  3); // 終了
 
+define('BATTLE_COUNTDOWN_SEC', 1);
+define('BATTLE_COUNTDOWN_MS', BATTLE_COUNTDOWN_SEC * 1000);
+define('BATTLE_REVEAL_PENDING_MS', 1000);
+
 // 進行時間（秒）：start.php / get_question.php で共通利用
 define('BATTLE_QUESTION_SEC', 10);
 define('BATTLE_ANSWER_SEC',    3);

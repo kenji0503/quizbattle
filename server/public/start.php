@@ -49,6 +49,7 @@ try {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>クイズバトル</title>
     <link rel="stylesheet" href="css/battle.css">
+    <link rel="stylesheet" href="css/ui-common.css">
     <style>
         #ranking th {
             background-color: #FFD700;
@@ -74,16 +75,74 @@ try {
             margin: 20px auto;
         }
 
+        #question-stage {
+            display: grid;
+            grid-template-columns: minmax(96px, 160px) minmax(0, 1fr);
+            gap: 14px;
+            width: 90%;
+            margin: 18px auto 0;
+            align-items: stretch;
+        }
+
+        #question-wrap {
+            min-width: 0;
+        }
+
+        #question-stage.is-reveal {
+            grid-template-columns: minmax(0, 1fr);
+        }
+
+        #question-stage.is-ready {
+            grid-template-columns: minmax(0, 1fr);
+        }
+
+        #question-stage.is-reveal #question-wrap {
+            grid-column: 1 / -1;
+        }
+
+        #question-stage.is-ready #question-wrap {
+            grid-column: 1 / -1;
+        }
+
         #question {
             background-color: #2c2c4a;
             border: 3px solid #FFD700;
             border-radius: 10px;
             padding: 20px;
-            width: 90%;
-            margin: 40px auto;
+            width: 100%;
+            margin: 0;
             font-size: 1.5em;
             text-align: left;
             white-space: pre-line;
+            box-sizing: border-box;
+            min-height: 100%;
+        }
+
+        #countdown-panel {
+            display: none;
+            margin: 0;
+            padding: 14px 12px;
+            border: 2px solid rgba(255, 215, 0, 0.65);
+            border-radius: 14px;
+            background: rgba(255, 215, 0, 0.08);
+            text-align: center;
+            color: #fff7c2;
+            box-sizing: border-box;
+            align-self: stretch;
+        }
+
+        #countdown-label {
+            font-size: 0.9rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+        }
+
+        #countdown-value {
+            margin-top: 8px;
+            font-size: clamp(2.8rem, 8vw, 4.8rem);
+            font-weight: 800;
+            line-height: 1;
+            color: #FFD700;
         }
 
         #choices {
@@ -91,7 +150,7 @@ try {
             grid-template-columns: 1fr 1fr;
             gap: 20px;
             width: 90%;
-            margin: 30px auto;
+            margin: 18px auto 30px;
         }
 
         #info-area {
@@ -101,10 +160,14 @@ try {
             font-size: 2.1em;
         }
 
+        #battleControls {
+            margin-top: 18px;
+        }
+
         /* 問題見出し（控えめ・自然） */
         #q-headline {
-            width: 90%;
-            margin: 18px auto 6px;
+            width: 100%;
+            margin: 0 0 10px;
             /* 質問の直前に軽く余白 */
             padding: 0;
             /* ベタ塗りはしない */
@@ -117,6 +180,10 @@ try {
             line-height: 1.5;
             letter-spacing: .02em;
             box-sizing: border-box;
+        }
+
+        #q-headline:empty {
+            display: none;
         }
 
         #q-headline::before {
@@ -132,13 +199,6 @@ try {
             /* ほんのり縁取り */
             transform: translateY(-1px);
         }
-
-        /* 見出しの直後に来る問題ボックスの間隔を少し詰める（任意） */
-        #q-headline+#question {
-            margin-top: 16px;
-            /* 既存 40px → 16px に */
-        }
-
 
         .choice-button {
             display: flex;
@@ -204,27 +264,125 @@ try {
         }
 
         @media all and (max-width: 600px) {
+            #question-stage {
+                grid-template-columns: minmax(72px, 92px) minmax(0, 1fr);
+                gap: 10px;
+                width: 94%;
+            }
+
+            #countdown-panel {
+                padding: 10px 6px;
+            }
+
+            #countdown-value {
+                font-size: clamp(2rem, 8vw, 2.8rem);
+            }
+
+            #countdown-label {
+                display: none;
+            }
+
+            #question {
+                padding: 14px;
+                font-size: 1.2em;
+            }
+
             #choices {
                 grid-template-columns: 1fr;
+                width: 94%;
+            }
+        }
+
+        #topBar {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto auto;
+            gap: 12px;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        #topBar .title-wrapper {
+            min-width: 0;
+        }
+
+        .player-name {
+            color: #000;
+            font-weight: bold;
+            min-width: 0;
+            max-width: 22vw;
+            overflow: hidden;
+        }
+
+        #sound-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border: 1px solid rgba(0, 0, 0, 0.16);
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.9);
+            color: #111;
+            font: inherit;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        #sound-toggle .icon-muted {
+            display: none;
+        }
+
+        #sound-toggle[data-muted="1"] .icon-on {
+            display: none;
+        }
+
+        #sound-toggle[data-muted="1"] .icon-muted {
+            display: inline;
+        }
+
+        @media all and (max-width: 600px) {
+            #topBar {
+                grid-template-columns: 1fr auto;
+            }
+
+            .player-name {
+                display: none;
+            }
+
+            #sound-toggle {
+                justify-self: end;
+                min-width: 44px;
+                padding: 8px 10px;
+                gap: 0;
+            }
+
+            #sound-toggle-label {
+                display: none;
             }
         }
     </style>
 
     <script>
-        // JS側へ埋め込み（polling.js が参照）
+        // JS側へ埋め込み（battle-runtime.js が参照）
         window.__BATTLE_ID__ = <?= json_encode($bid) ?>; // bid
         window.__GROUP_ID__ = <?= json_encode($gid) ?>; // gid
         window.__USER_ID__ = <?= json_encode($uid) ?>; // uid
+        window.__QB_WS_URL__ = <?= json_encode(battle_ws_public_url(), JSON_UNESCAPED_SLASHES) ?>;
     </script>
 </head>
 
 <body id="blackBody">
     <div id="topBar">
         <div class="title-wrapper">
-            <h1 class="ellipsis no-space">推し問バトル</h1>
+            <h1 id="battle-title" class="ellipsis no-space"></h1>
         </div>
 
-        <div style=" color:#000; font-weight:bold;">
+        <button id="sound-toggle" type="button" aria-pressed="false" aria-label="音声をオフにする">
+            <span class="icon-on" aria-hidden="true">🔊</span>
+            <span class="icon-muted" aria-hidden="true">🔇</span>
+            <span id="sound-toggle-label">音あり</span>
+        </button>
+
+        <div class="player-name">
             <div class="ellipsis"><?= htmlspecialchars($userName, ENT_QUOTES, 'UTF-8') ?> さん</div>
         </div>
 
@@ -236,8 +394,16 @@ try {
         </div>
 
         <!-- 問題 -->
-        <div id="q-headline"></div>
-        <div id="question"></div>
+        <div id="question-stage">
+            <div id="countdown-panel">
+                <div id="countdown-label">問題を出題します</div>
+                <div id="countdown-value"></div>
+            </div>
+            <div id="question-wrap">
+                <div id="q-headline"></div>
+                <div id="question"></div>
+            </div>
+        </div>
 
         <!-- メッセージ -->
         <div id="message-area" style="color:#ff8a80; font-weight:bold; margin-top:10px;"></div>
@@ -263,10 +429,28 @@ try {
 
     </div>
 
-    <?php $v = urlencode((string)@filemtime(__DIR__ . '/polling.js')); ?>
-    <script src="js/polling.js?v=<?= time() ?>"></script>
+    <div hidden aria-hidden="true">
+        <audio id="sound-answerBtn" preload="auto" playsinline>
+            <source src="sound/answerBtn.mp3" type="audio/mpeg">
+        </audio>
+        <audio id="sound-beep" preload="auto" playsinline>
+            <source src="sound/beep.mp3" type="audio/mpeg">
+        </audio>
+        <audio id="sound-kotae" preload="auto" playsinline>
+            <source src="sound/kotae.mp3" type="audio/mpeg">
+        </audio>
+        <audio id="sound-countdown" preload="auto" playsinline>
+            <source src="sound/countdown.mp3" type="audio/mpeg">
+        </audio>
+        <audio id="sound-mondai" preload="auto" playsinline>
+            <source src="sound/mondai.mp3" type="audio/mpeg">
+        </audio>
+    </div>
 
-    <!-- 自動遷移は polling.js に一本化 -->
+    <?php $v = urlencode((string)@filemtime(__DIR__ . '/js/battle-runtime.js')); ?>
+    <script src="js/battle-runtime.js?v=<?= $v ?>"></script>
+
+    <!-- 自動遷移は battle-runtime.js に一本化 -->
 
 </body>
 

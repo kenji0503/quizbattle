@@ -201,36 +201,92 @@ $log->debug("lineup ready: bid={$bid}, gid={$gid}, count={$lcount}");
 /* 3) state を seed（初期1行を作成/更新） */
 $QUESTION_MS = defined('QB_QUESTION_MS') ? QB_QUESTION_MS : 8000;
 $ANSWER_MS   = defined('QB_ANSWER_MS')   ? QB_ANSWER_MS   : 8000;
+$REVEAL_PENDING_MS = defined('BATTLE_REVEAL_PENDING_MS') ? BATTLE_REVEAL_PENDING_MS : 1000;
 $nowMs       = (int)floor(microtime(true) * 1000);
-$delayMs     = 3000;                     // 3秒後に開始（全員同期のための猶予）
-$q_start_at  = $nowMs + $delayMs;
-$reveal_at   = $q_start_at + $QUESTION_MS;
-$switch_at   = $reveal_at + $ANSWER_MS;
-$ts_ms       = $nowMs;
+$delayMs     = 3000;
+$stState = $pdo->prepare("
+  SELECT bid, gid, bnum, phase, q_start_at, reveal_at, switch_at, ts_ms
+    FROM qb_battle_state
+   WHERE bid = :bid AND gid = :gid
+   LIMIT 1
+");
+$stState->execute([':bid' => $bid, ':gid' => $gid]);
+$stateRow = $stState->fetch(PDO::FETCH_ASSOC) ?: null;
 
-$ins = $pdo->prepare("
-   INSERT INTO qb_battle_state
-     (bid,gid,bnum,phase,q_start_at,reveal_at,switch_at,ts_ms)
-   VALUES (?,?,?,?,?,?,?,?)
-   ON DUPLICATE KEY UPDATE
-     bnum=VALUES(bnum), phase=VALUES(phase),
-     q_start_at=VALUES(q_start_at), reveal_at=VALUES(reveal_at),
-     switch_at=VALUES(switch_at), ts_ms=VALUES(ts_ms)
- ");
-$ins->execute([$bid, $gid, 1, 0, $q_start_at, $reveal_at, $switch_at, $ts_ms]);
+if ($stateRow) {
+  $existingQStart = (int)$stateRow['q_start_at'];
+  $existingReveal = (int)$stateRow['reveal_at'];
+  $existingSwitch = (int)$stateRow['switch_at'];
+  $derivedPhase = battle_derive_phase($nowMs, $existingQStart, $existingReveal, $existingSwitch);
 
-$log->debug(sprintf(
-  '[COUNTDOWN_SEEDED] bid=%d gid=%d now=%s q_start_at=%s reveal_at=%s switch_at=%s (delayMs=%d, Q=%d, A=%d)',
-  $bid,
-  $gid,
-  fmt_ms($nowMs),
-  fmt_ms($q_start_at),
-  fmt_ms($reveal_at),
-  fmt_ms($switch_at),
-  $delayMs,
-  $QUESTION_MS,
-  $ANSWER_MS
-));
+  if ($derivedPhase === BATTLE_PHASE_WAIT && $existingQStart > $nowMs) {
+    $q_start_at = $existingQStart;
+    $reveal_at = $existingReveal;
+    $switch_at = $existingSwitch;
+    $log->debug(sprintf(
+      '[COUNTDOWN_REUSED] bid=%d gid=%d now=%s q_start_at=%s reveal_at=%s switch_at=%s',
+      $bid,
+      $gid,
+      fmt_ms($nowMs),
+      fmt_ms($q_start_at),
+      fmt_ms($reveal_at),
+      fmt_ms($switch_at)
+    ));
+  } elseif ($derivedPhase >= BATTLE_PHASE_QUESTION && $derivedPhase < BATTLE_PHASE_FINISHED) {
+    header("Location: start.php?gid={$gid}&bid={$bid}");
+    exit;
+  } elseif ($derivedPhase >= BATTLE_PHASE_FINISHED) {
+    header("Location: result.php?gid={$gid}&bid={$bid}&notice=ended");
+    exit;
+  }
+}
+
+if (!isset($q_start_at)) {
+  $q_start_at  = $nowMs + $delayMs;
+  $reveal_at   = $q_start_at + $QUESTION_MS + $REVEAL_PENDING_MS;
+  $switch_at   = $reveal_at + $ANSWER_MS;
+  $ts_ms       = $nowMs;
+
+  $ins = $pdo->prepare("
+     INSERT INTO qb_battle_state
+       (bid,gid,bnum,phase,q_start_at,reveal_at,switch_at,ts_ms)
+     VALUES (?,?,?,?,?,?,?,?)
+     ON DUPLICATE KEY UPDATE
+       bnum=VALUES(bnum), phase=VALUES(phase),
+       q_start_at=VALUES(q_start_at), reveal_at=VALUES(reveal_at),
+       switch_at=VALUES(switch_at), ts_ms=VALUES(ts_ms)
+   ");
+  $ins->execute([$bid, $gid, 1, 0, $q_start_at, $reveal_at, $switch_at, $ts_ms]);
+  battle_update_lineup_schedule($pdo, $bid, 1, $q_start_at, $reveal_at, $switch_at);
+
+  $log->debug(sprintf(
+    '[COUNTDOWN_SEEDED] bid=%d gid=%d now=%s q_start_at=%s reveal_at=%s switch_at=%s (delayMs=%d, Q=%d, A=%d)',
+    $bid,
+    $gid,
+    fmt_ms($nowMs),
+    fmt_ms($q_start_at),
+    fmt_ms($reveal_at),
+    fmt_ms($switch_at),
+    $delayMs,
+    $QUESTION_MS,
+    $ANSWER_MS
+  ));
+
+  battle_ws_publish(
+    ["battle:{$bid}:{$gid}", "lobby:{$bid}:{$gid}"],
+    'battle.state',
+    [
+      'bid' => (int)$bid,
+      'gid' => (int)$gid,
+      'bnum' => 1,
+      'phase' => BATTLE_PHASE_WAIT,
+      'q_start_at' => (int)$q_start_at,
+      'reveal_at' => (int)$reveal_at,
+      'switch_at' => (int)$switch_at,
+      'now' => (int)$nowMs,
+    ]
+  );
+}
 
 ?>
 <!doctype html>
@@ -253,24 +309,27 @@ $log->debug(sprintf(
 
 <body>
   <h1 style="text-align:center">バトル開始</h1>
-  <h2 style="text-align:center">これから問題を出題します！</h2>
-  <div id="cd" class="count">…準備中</div>
+  <h2 style="text-align:center">問題を出題します</h2>
+  <div id="cd" class="count">3</div>
 
   <script>
     const startAtMs = <?= (int)$q_start_at ?>;
     const bid = <?= (int)$bid ?>;
     const el = document.getElementById('cd');
 
-    const iv = setInterval(() => {
-      const d = Math.floor((startAtMs - Date.now()) / 1000);
-      if (d <= 0) {
-        clearInterval(iv);
-        el.textContent = 'START!';
-        setTimeout(() => location.href = `start.php?bid=${bid}`, 200);
-      } else {
-        el.textContent = d;
+    const render = () => {
+      const remainMs = startAtMs - Date.now();
+      const remainSec = Math.ceil(remainMs / 1000);
+      if (remainSec > 0) {
+        el.textContent = String(remainSec);
+        return;
       }
-    }, 250);
+      clearInterval(iv);
+      location.href = `start.php?bid=${bid}`;
+    };
+
+    render();
+    const iv = setInterval(render, 100);
   </script>
 </body>
 

@@ -32,10 +32,20 @@ try {
     }
     $bnum = (int)$state['bnum'];
     $nowMs = (int)floor(microtime(true) * 1000);
+    $revealPendingMs = defined('BATTLE_REVEAL_PENDING_MS') ? BATTLE_REVEAL_PENDING_MS : 1000;
+    $answerCloseAt = max((int)$state['q_start_at'], (int)$state['reveal_at'] - $revealPendingMs);
     if ($nowMs < (int)$state['q_start_at']) {
-        api_json_fail('not ready / countdown');
+        api_json_fail('not ready / countdown', 200, [
+            'phase_hint' => 'countdown',
+            'bnum' => $bnum,
+            'now_ms' => $nowMs,
+            'q_start_at' => (int)$state['q_start_at'],
+            'reveal_at' => (int)$state['reveal_at'],
+            'switch_at' => (int)$state['switch_at'],
+        ]);
     }
     $showAnswer = ($nowMs >= (int)$state['reveal_at']) ? 1 : 0;
+    $revealPending = (!$showAnswer && $nowMs >= $answerCloseAt) ? 1 : 0;
 
     // lineup → 問題キー
     // lineup 取得
@@ -96,7 +106,7 @@ try {
     }
 
     // ★UIヒント用（現行のタイマー制御から推定した簡易フェーズ）
-    $phase_hint = ($nowMs < (int)$state['q_start_at']) ? 'countdown' : ($showAnswer ? 'reveal' : 'answering');
+    $phase_hint = ($nowMs < (int)$state['q_start_at']) ? 'countdown' : ($showAnswer ? 'reveal' : ($revealPending ? 'reveal_pending' : 'answering'));
 
     // ★任意: ラスト問題か？（次のボタン表示・結果遷移の判断に便利）
     $isLast = 0;
@@ -121,6 +131,20 @@ try {
 
     if (!$md) {
         api_json_fail('question not found', 404);
+    }
+
+    $themeTitle = '';
+    try {
+        $stTitle = $pdo->prepare("
+            SELECT title
+              FROM qb_question_category
+             WHERE cate1 = ? AND cate2 = ? AND qid = ?
+             LIMIT 1
+        ");
+        $stTitle->execute([(int)$key['cate1'], (int)$key['cate2'], (int)$key['id']]);
+        $themeTitle = (string)($stTitle->fetchColumn() ?: '');
+    } catch (\Throwable $e) {
+        $log->debug('[GETQ] themeTitle fetch failed: ' . $e->getMessage());
     }
 
     // 表示用見出し（任意。不要なら空でOK）
@@ -150,10 +174,20 @@ try {
                 if ((int)$r['id'] === (int)$key['id']) $title = (string)$r['title'];
             }
             $display = ($genre !== '' || $title !== '') ? ($genre . '＞' . $title) : '';
+            if ($themeTitle === '' && $title !== '') {
+                $themeTitle = $title;
+            }
             $log->debug('[GETQ] displayFallback=' . json_encode($display, JSON_UNESCAPED_UNICODE));
         } catch (\Throwable $e) {
             $log->debug('[GETQ] displayFallback error: ' . $e->getMessage());
         }
+    }
+
+    if ($themeTitle === '' && $display !== '') {
+        $themeTitle = preg_replace('/^.*＞/u', '', $display);
+        $themeTitle = preg_replace('/^「/u', '', (string)$themeTitle);
+        $themeTitle = preg_replace('/」の問題$/u', '', (string)$themeTitle);
+        $themeTitle = trim((string)$themeTitle);
     }
 
     // 成功レスポンス
@@ -169,6 +203,7 @@ try {
         'num'         => (int)$key['num'],
 
         'display'     => $display,
+        'theme_title' => $themeTitle,
         'mondai'      => (string)$md['mondai'],
         'qa'          => (string)$md['qa'],
         'qb'          => (string)$md['qb'],
@@ -176,6 +211,8 @@ try {
         'qd'          => (string)$md['qd'],
         'kaito'       => $showAnswer ? strtoupper((string)$md['kaito']) : null,
         'show_answer' => $showAnswer,
+        'answer_close_at' => $answerCloseAt,
+        'reveal_pending'  => $revealPending ? 1 : 0,
         'answered_players' => $answeredPlayers,
         'total_players'    => $totalPlayers,
         'all_answered'     => $allAnswered,     // 全員回答済みなら 1

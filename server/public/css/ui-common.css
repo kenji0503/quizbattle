@@ -1,0 +1,75 @@
+:root {
+  --qb-yellow-1: #ffe08a;
+  --qb-yellow-2: #ffbf1f;
+  --qb-yellow-ink: #231900;
+  --qb-yellow-border: rgba(255, 209, 102, 0.78);
+  --qb-yellow-shadow: rgba(255, 191, 31, 0.28);
+}
+
+.qb-action-row {
+  margin-top: 18px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.qb-round-yellow-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* 高さを変えるならここ */
+  min-height: 24px;
+  /* 余白を変えるならここ */
+  padding: 8px 24px;
+  /* 角の丸みを変えるならここ */
+  border-radius: 80px;
+  border: 1px solid var(--qb-yellow-border);
+  background: linear-gradient(180deg, var(--qb-yellow-1), var(--qb-yellow-2));
+  color: var(--qb-yellow-ink);
+  font: inherit;
+  /* 文字サイズを変えるならここ */
+  font-size: 2.8rem;
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+  box-shadow: 0 10px 24px var(--qb-yellow-shadow);
+  cursor: pointer;
+  transition:
+    transform 0.12s ease,
+    filter 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.qb-round-yellow-btn:hover {
+  filter: brightness(1.03);
+  box-shadow: 0 12px 28px rgba(255, 191, 31, 0.34);
+}
+
+.qb-round-yellow-btn:active {
+  transform: translateY(1px) scale(0.99);
+}
+
+.qb-round-yellow-btn:focus-visible {
+  outline: 3px solid rgba(255, 224, 138, 0.4);
+  outline-offset: 2px;
+}
+
+.qb-round-yellow-btn:disabled,
+.qb-round-yellow-btn[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+.qb-round-yellow-btn--wide {
+  width: min(100%, 560px);
+}
+
+@media (max-width: 640px) {
+  .qb-round-yellow-btn--wide {
+    width: 100%;
+  }
+}

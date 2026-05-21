@@ -18,6 +18,8 @@ try {
     // ---- 設定（必要に応じて調整）----
     if (!defined('QB_QUESTION_MS')) define('QB_QUESTION_MS', 8000); // 出題時間
     if (!defined('QB_ANSWER_MS'))   define('QB_ANSWER_MS',   8000); // 正解表示時間
+    if (!defined('BATTLE_COUNTDOWN_MS')) define('BATTLE_COUNTDOWN_MS', 1000);
+    if (!defined('BATTLE_REVEAL_PENDING_MS')) define('BATTLE_REVEAL_PENDING_MS', 1000);
 
     $bid = (int)($_GET['bid'] ?? 0);
     $gid = (int)($_GET['gid'] ?? 0);
@@ -99,23 +101,25 @@ try {
         $newStart = $newReveal = $newSwitch = null;
 
         if ($maxNo >= 1 && $nextBnum <= $maxNo) {
-            // 次問の時間割は「直前のswitch_at基準」で固定
-            $newStart  = (int)$state['switch_at'];
-            $newReveal = $newStart + QB_QUESTION_MS;
+            // 次問開始前にも全員向けの待機カウントダウンを入れる
+            $newStart  = $nowMs + BATTLE_COUNTDOWN_MS;
+            $newReveal = $newStart + QB_QUESTION_MS + BATTLE_REVEAL_PENDING_MS;
             $newSwitch = $newReveal + QB_ANSWER_MS;
 
             $up = $pdo->prepare(
                 "UPDATE qb_battle_state
-               SET bnum=?, phase=1,
+               SET bnum=?, phase=0,
                    q_start_at=?, reveal_at=?, switch_at=?,
                    ts_ms=?
              WHERE bid=? AND gid=? AND bnum=?"
             );
             $up->execute([$nextBnum, $newStart, $newReveal, $newSwitch, $nowMs, $bid, $gid, $currBnum]);
+            battle_update_lineup_schedule($pdo, $bid, $nextBnum, $newStart, $newReveal, $newSwitch);
         } else {
             // 最終問題終了 → FINISHED
             $up = $pdo->prepare("UPDATE qb_battle_state SET phase=3, ts_ms=? WHERE bid=? AND gid=?");
             $up->execute([$nowMs, $bid, $gid]);
+            battle_update_lineup_schedule($pdo, $bid, $currBnum, (int)$state['q_start_at'], (int)$state['reveal_at'], (int)$state['switch_at']);
         }
 
         // 取り直し & 再導出
@@ -176,6 +180,8 @@ try {
 
     $isLast = ($maxNo > 0 && (int)$state['bnum'] >= $maxNo) ? 1 : 0;
     $allAnswered = 0;
+    $answerCloseAt = max((int)$state['q_start_at'], (int)$state['reveal_at'] - BATTLE_REVEAL_PENDING_MS);
+    $revealPending = ((int)$phaseDerived === 1 && $nowMs >= $answerCloseAt) ? 1 : 0;
 
     try {
         $lk = $pdo->prepare("
@@ -220,6 +226,8 @@ try {
         'phase_hint'  => phase_hint_of((int)$phaseDerived),   // ← 追加
         'is_last'     => $isLast,                              // ← 追加
         'all_answered' => $allAnswered,
+        'answer_close_at' => $answerCloseAt,
+        'reveal_pending' => $revealPending,
         'ts'          => (int)$state['ts_ms'],
         'show_answer' => $showAnswer ? 1 : 0,
         'next_at'     => (int)$nextAt,

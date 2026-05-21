@@ -55,8 +55,7 @@ function getTitle($cate1, $cate2, $id)
     $sql2 = "SELECT title FROM qb_question_category WHERE cate1 = :c1 AND cate2 = 0 AND qid = 0 LIMIT 1";
     $st2 = $pdo->prepare($sql2);
     $st2->execute([
-        ':c1' => $cate1,
-        ':c2' => $cate2
+        ':c1' => $cate1
     ]);
     $genre = $st2->fetchColumn();
 
@@ -108,6 +107,220 @@ function abs_url(string $path): string
     $host   = $_SERVER['HTTP_HOST'] ?? 'localhost';
     $base   = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? ''), '/');
     return $scheme . '://' . $host . $base . '/' . ltrim($path, '/');
+}
+
+function battle_ws_public_url(): string
+{
+    $explicit = envValueAny(['QB_WS_PUBLIC_URL', 'WS_PUBLIC_URL'], '');
+    if ($explicit !== '') {
+        return $explicit;
+    }
+
+    $baseUrl = defined('BASE_URL') ? (string)BASE_URL : '';
+    if ($baseUrl !== '') {
+        $parts = parse_url($baseUrl);
+        $scheme = (($parts['scheme'] ?? 'https') === 'https') ? 'wss' : 'ws';
+        $host = $parts['host'] ?? ($_SERVER['HTTP_HOST'] ?? 'localhost');
+        $port = isset($parts['port']) ? ':' . $parts['port'] : '';
+        return $scheme . '://' . $host . $port . '/ws';
+    }
+
+    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'wss' : 'ws';
+    $host   = $_SERVER['HTTP_HOST'] ?? 'localhost';
+    return $scheme . '://' . $host . '/ws';
+}
+
+function battle_ws_internal_url(): string
+{
+    $explicit = envValueAny(['QB_WS_INTERNAL_URL', 'WS_INTERNAL_URL'], '');
+    if ($explicit !== '') {
+        return $explicit;
+    }
+
+    $port = envValueAny(['QB_WS_PORT', 'WS_PORT'], '8081') ?? '8081';
+    $port = preg_replace('/[^0-9]/', '', (string)$port);
+    if ($port === '') {
+        $port = '8081';
+    }
+
+    return 'http://127.0.0.1:' . $port . '/publish';
+}
+
+function battle_ws_secret(): string
+{
+    return envValueAny(['QB_WS_SECRET', 'WS_SECRET'], '') ?? '';
+}
+
+function battle_has_lineup_schedule_columns(PDO $pdo): bool
+{
+    static $cache = [];
+
+    $key = spl_object_id($pdo);
+    if (array_key_exists($key, $cache)) {
+        return $cache[$key];
+    }
+
+    $st = $pdo->query("
+        SELECT COUNT(*)
+          FROM INFORMATION_SCHEMA.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = 'qb_battle_lineup'
+           AND COLUMN_NAME IN ('q_start_at_ms', 'reveal_at_ms', 'switch_at_ms')
+    ");
+    $count = (int)($st ? $st->fetchColumn() : 0);
+    $cache[$key] = ($count === 3);
+    return $cache[$key];
+}
+
+function battle_update_lineup_schedule(PDO $pdo, int $bid, int $orderNo, int $qStartAtMs, int $revealAtMs, int $switchAtMs): void
+{
+    if (!battle_has_lineup_schedule_columns($pdo)) {
+        return;
+    }
+
+    $st = $pdo->prepare("
+        UPDATE qb_battle_lineup
+           SET q_start_at_ms = :q_start_at_ms,
+               reveal_at_ms = :reveal_at_ms,
+               switch_at_ms = :switch_at_ms
+         WHERE bid = :bid
+           AND order_no = :order_no
+    ");
+    $st->execute([
+        ':q_start_at_ms' => $qStartAtMs,
+        ':reveal_at_ms' => $revealAtMs,
+        ':switch_at_ms' => $switchAtMs,
+        ':bid' => $bid,
+        ':order_no' => $orderNo,
+    ]);
+}
+
+function battle_derive_phase(int $nowMs, int $qStartAt, int $revealAt, int $switchAt): int
+{
+    if ($nowMs < $qStartAt) return BATTLE_PHASE_WAIT;
+    if ($nowMs < $revealAt) return BATTLE_PHASE_QUESTION;
+    if ($nowMs < $switchAt) return BATTLE_PHASE_ANSWER;
+    return BATTLE_PHASE_FINISHED;
+}
+
+function battle_collect_lobby_snapshot(PDO $pdo, int $bid, int $gid): array
+{
+    $st = $pdo->prepare("
+        SELECT name, avatar_type
+          FROM qb_battle_participants
+         WHERE bid = :bid
+           AND gid = :gid
+           AND last_ping > NOW() - INTERVAL 60 SECOND
+         ORDER BY uid ASC
+    ");
+    $st->execute([':bid' => $bid, ':gid' => $gid]);
+    $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+
+    $participants = [];
+    $avatars = [];
+    foreach ($rows as $row) {
+        $name = (string)($row['name'] ?? '');
+        if ($name === '') continue;
+        $participants[] = $name;
+        $avatars[] = [
+            'name' => $name,
+            'type' => (string)($row['avatar_type'] ?? ''),
+        ];
+    }
+
+    $ss = $pdo->prepare("
+        SELECT bid, gid, bnum, q_start_at, reveal_at, switch_at, ts_ms
+          FROM qb_battle_state
+         WHERE bid = :bid
+         ORDER BY ts_ms DESC
+         LIMIT 1
+    ");
+    $ss->execute([':bid' => $bid]);
+    $state = $ss->fetch(PDO::FETCH_ASSOC) ?: null;
+
+    $nowMs = (int)floor(microtime(true) * 1000);
+    $phase = 0;
+    $started = false;
+    $startAt = null;
+    $shouldGo = 0;
+
+    if ($state) {
+        $phase = battle_derive_phase(
+            $nowMs,
+            (int)$state['q_start_at'],
+            (int)$state['reveal_at'],
+            (int)$state['switch_at']
+        );
+        $started = true;
+        if ($phase === BATTLE_PHASE_WAIT) {
+            $startAt = (int)$state['q_start_at'];
+        }
+        if ($phase >= BATTLE_PHASE_QUESTION) {
+            $shouldGo = 1;
+        }
+    }
+
+    return [
+        'participants' => $participants,
+        'avatars' => $avatars,
+        'count' => count($participants),
+        'started' => $started,
+        'phase' => $phase,
+        'start_at' => $startAt,
+        'now' => $nowMs,
+        'should_go' => $shouldGo,
+        'q_start_at' => $state ? (int)$state['q_start_at'] : null,
+        'reveal_at' => $state ? (int)$state['reveal_at'] : null,
+        'switch_at' => $state ? (int)$state['switch_at'] : null,
+        'bid' => $bid,
+        'gid' => $gid,
+    ];
+}
+
+function battle_ws_publish(array $rooms, string $event, array $payload = []): bool
+{
+    $rooms = array_values(array_filter(array_map('strval', $rooms), static fn($room) => $room !== ''));
+    if ($rooms === []) {
+        return false;
+    }
+
+    $body = json_encode([
+        'event' => $event,
+        'rooms' => $rooms,
+        'payload' => $payload,
+        'secret' => battle_ws_secret(),
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+    if ($body === false) {
+        return false;
+    }
+
+    $headers = [
+        'Content-Type: application/json; charset=UTF-8',
+        'Connection: close',
+    ];
+
+    $secret = battle_ws_secret();
+    if ($secret !== '') {
+        $headers[] = 'X-QB-WS-Secret: ' . $secret;
+    }
+
+    $context = stream_context_create([
+        'http' => [
+            'method' => 'POST',
+            'header' => implode("\r\n", $headers),
+            'content' => $body,
+            'timeout' => 0.5,
+            'ignore_errors' => true,
+        ],
+    ]);
+
+    try {
+        $result = @file_get_contents(battle_ws_internal_url(), false, $context);
+        return $result !== false;
+    } catch (\Throwable $e) {
+        return false;
+    }
 }
 
 
@@ -200,8 +413,8 @@ function haya_delete_temp_group_all(PDO $pdo, int $gid): void
         $stmt->execute([':gid' => $gid]);
 
         // 5) 即席ユーザ（このグループ配下のみ）
-        //    ※ 誤削除防止のため role=TEMP(=3想定) のみを削除
-        $tempRole = defined('UserRole::TEMP') ? UserRole::TEMP : 3;
+        //    ※ 誤削除防止のため role=TEMP のみを削除
+        $tempRole = defined('ROLE_TEMP') ? (int)ROLE_TEMP : 1;
         $stmt = $pdo->prepare("DELETE FROM sc_user WHERE gid = :gid AND role = :role");
         $stmt->execute([':gid' => $gid, ':role' => $tempRole]);
 
@@ -312,7 +525,8 @@ function uniq_by_gid(array $rows): array
  */
 function getSelectableGroupsForUser(PDO $pdo, int $role, ?int $login_gid, int $uid): array
 {
-    if ($role === UserRole::ADMIN) {
+    $adminRole = defined('ROLE_ADMIN') ? (int)ROLE_ADMIN : 9;
+    if ($role === $adminRole) {
         // getAllGroups() は gid, name, manager_name, manager_email を返す実装にしておく
         return getAllGroups();
     }

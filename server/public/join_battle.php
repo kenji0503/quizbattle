@@ -113,6 +113,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$alreadyJoined) {
             // ★ ここで自分の avatar を確定
             ensureAvatarInParticipants($pdo, $gid, $bid, $uid, $name, $rootBid, $prevBid);
 
+            battle_ws_publish(
+                ["lobby:{$bid}:{$gid}"],
+                'lobby.snapshot',
+                battle_collect_lobby_snapshot($pdo, $bid, $gid)
+            );
+
             $log->debug("Anonymous participant registered: uid=$uid, gid=$gid, bid=$bid, name=$name");
             header("Location: join_battle.php?gid={$gid}&bid={$bid}");
             exit;
@@ -144,6 +150,7 @@ while ($r = $stList->fetch(PDO::FETCH_ASSOC)) {
         $initialAvatars[] = ['name' => $r['name'], 'type' => $type]; // ★ type がある人だけ初期描画
     }
 }
+$participantCount = count($participants);
 
 // ... 既存の $participants / $initialAvatars 生成の直後あたりに追記
 $stThemes = $pdo->prepare("
@@ -171,6 +178,7 @@ $themes = $stThemes->fetchAll(PDO::FETCH_ASSOC);
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>クイズバトル待合室</title>
     <link rel="stylesheet" href="css/sprite.css">
+    <link rel="stylesheet" href="css/ui-common.css">
     <script src="js/sprite_runtime.js"></script>
     <style>
         :root {
@@ -205,10 +213,60 @@ $themes = $stThemes->fetchAll(PDO::FETCH_ASSOC);
             background: linear-gradient(90deg, #181a3a, #2a1a47 40%, #0b2846);
             border-bottom: 1px solid rgba(255, 255, 255, .1);
             padding: 10px 16px;
+            color: #fff;
+            display: grid;
+            grid-template-columns: auto minmax(0, 1fr) auto;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .header-status {
+            justify-self: start;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            min-height: 38px;
+            padding: 0 14px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, .08);
+            border: 1px solid rgba(255, 255, 255, .14);
+            font-size: 14px;
+            font-weight: 800;
+            white-space: nowrap;
+        }
+
+        .header-status::before {
+            content: "";
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            background: #ffd166;
+            box-shadow: 0 0 0 4px rgba(255, 209, 102, .16);
+        }
+
+        .header-status[data-mode="countdown"]::before {
+            background: #7effa1;
+            box-shadow: 0 0 0 4px rgba(126, 255, 161, .16);
+        }
+
+        .header-title {
+            justify-self: center;
+            min-width: 0;
             text-align: center;
             letter-spacing: .12em;
             font-weight: 800;
-            color: #fff;
+            white-space: nowrap;
+            color: #ffb24d;
+        }
+
+        .header-player {
+            justify-self: end;
+            min-width: 0;
+            text-align: right;
+            font-weight: 800;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .scene {
@@ -365,7 +423,7 @@ $themes = $stThemes->fetchAll(PDO::FETCH_ASSOC);
             position: relative;
             z-index: 2;
             max-width: 1100px;
-            margin: 16px auto 0;
+            margin: 8px auto 0;
             padding: 18px 16px 20px;
             background: var(--card-bg);
             border: 1px solid var(--card-stroke);
@@ -375,6 +433,20 @@ $themes = $stThemes->fetchAll(PDO::FETCH_ASSOC);
 
         .muted {
             color: var(--space-dim)
+        }
+
+        #countdown {
+            font-size: 1.6rem;
+            margin: 0 0 4px;
+        }
+
+        #countdown:empty {
+            display: none;
+        }
+
+        .intro-note {
+            margin: 0 0 10px;
+            line-height: 1.35;
         }
 
         .err {
@@ -413,8 +485,12 @@ $themes = $stThemes->fetchAll(PDO::FETCH_ASSOC);
             filter: brightness(1.06)
         }
 
-        ul#participant-list {
-            margin: .4rem 0 0 1rem
+        #participant-list {
+            margin-top: .4rem;
+            display: flex;
+            flex-wrap: wrap;
+            gap: .45rem .7rem;
+            align-items: center;
         }
 
         .join-inline {
@@ -469,29 +545,170 @@ $themes = $stThemes->fetchAll(PDO::FETCH_ASSOC);
             opacity: .9;
         }
 
-        /* 選択テーマのチップ表示 */
+        .info-row {
+            display: grid;
+            grid-template-columns: 120px minmax(0, 1fr);
+            gap: 12px;
+            align-items: start;
+            margin-top: 12px;
+        }
+
+        .info-label {
+            font-size: 1rem;
+            font-weight: 800;
+            line-height: 1.25;
+        }
+
+        .info-value {
+            font-size: 1rem;
+            line-height: 1.25;
+        }
+
         .theme-wrap {
-            margin-top: .6rem;
             display: flex;
-            gap: .4rem;
+            gap: .22rem .45rem;
             flex-wrap: wrap;
+            line-height: 1.25;
         }
 
         .theme-chip {
             display: inline-flex;
             align-items: center;
-            gap: .35rem;
             padding: 4px 8px;
             border-radius: 999px;
             background: rgba(255, 255, 255, .10);
             border: 1px solid var(--card-stroke);
-            font-size: 12px;
+            font-size: 1rem;
             color: var(--space-ink);
             white-space: nowrap;
+            line-height: 1.15;
         }
 
-        .theme-chip small {
-            opacity: .8;
+        .participant-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: .4rem;
+            padding: 4px 10px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, .08);
+            border: 1px solid rgba(255, 255, 255, .12);
+            font-size: 1rem;
+            line-height: 1.15;
+        }
+
+        .participant-chip::before {
+            content: "";
+        }
+
+        .participant-chip.me {
+            color: var(--me);
+            font-weight: 700;
+            border-color: rgba(126, 255, 161, .28);
+        }
+
+        .label-mobile {
+            display: none;
+        }
+
+        .start-form {
+            margin-top: 18px;
+        }
+
+        @media (max-width: 720px) {
+            .space-header {
+                grid-template-columns: auto minmax(0, 1fr) auto;
+                padding: 8px 10px;
+                gap: 8px;
+            }
+
+            .header-status {
+                min-height: 30px;
+                padding: 0 10px;
+                gap: 6px;
+                font-size: 12px;
+            }
+
+            .header-title {
+                font-size: 14px;
+                letter-spacing: .05em;
+                white-space: nowrap;
+            }
+
+            .header-player {
+                max-width: 24vw;
+                font-size: 13px;
+            }
+
+            .info-row {
+                grid-template-columns: auto minmax(0, 1fr);
+                gap: 8px;
+                align-items: start;
+                margin-top: 10px;
+            }
+
+            .info-label,
+            .info-value,
+            .theme-chip,
+            .participant-chip,
+            .muted {
+                font-size: 14px;
+                line-height: 1.2;
+            }
+
+            .intro-note {
+                line-height: 1.34;
+            }
+
+            .label-desktop {
+                display: none;
+            }
+
+            .label-mobile {
+                display: inline;
+            }
+
+            .theme-wrap {
+                display: block;
+                line-height: 1.2;
+            }
+
+            .theme-chip {
+                display: inline;
+                padding: 0;
+                border: none;
+                background: transparent;
+                border-radius: 0;
+                white-space: normal;
+            }
+
+            #participant-list {
+                display: block;
+                margin-top: 0;
+                line-height: 1.2;
+            }
+
+            .participant-chip {
+                display: inline;
+                padding: 0;
+                border: none;
+                background: transparent;
+                border-radius: 0;
+                gap: 0;
+            }
+
+            .participant-chip::before {
+                content: "";
+            }
+
+            .participant-chip + .participant-chip::before {
+                content: "、";
+                color: rgba(255, 255, 255, .72);
+                margin-right: .08rem;
+            }
+
+            .participant-chip.me {
+                border-color: transparent;
+            }
         }
     </style>
     <!-- OGPタグ -->
@@ -510,7 +727,11 @@ $themes = $stThemes->fetchAll(PDO::FETCH_ASSOC);
 </head>
 
 <body class="space">
-    <header class="space-header">推し問バトル – 待合室（宇宙ロビー）</header>
+    <header class="space-header">
+        <div id="lobbyStatus" class="header-status" data-mode="wait">バトル開始待ち</div>
+        <div class="header-title">宇宙ロビー</div>
+        <div class="header-player"><?= htmlspecialchars($currentName ?: '未参加', ENT_QUOTES) ?></div>
+    </header>
 
     <main class="scene">
         <div class="stars"></div>
@@ -520,15 +741,14 @@ $themes = $stThemes->fetchAll(PDO::FETCH_ASSOC);
         <div id="galaxy" aria-label="参加者の宇宙キャラクタ表示"></div>
 
         <section class="card">
-            <h2 id="lobbyTitle">バトル開始待ち</h2>
-            <div id="countdown" style="font-size:1.6rem;margin-top:.6rem;"></div>
+            <div id="countdown"></div>
 
             <?php if (!empty($error)): ?>
                 <p class="err"><?= htmlspecialchars($error, ENT_QUOTES) ?></p>
             <?php endif; ?>
 
             <?php if ($alreadyJoined): ?>
-                <p class="muted">あなたは「<strong style="color:var(--me)"><?= htmlspecialchars($currentName, ENT_QUOTES) ?></strong>」として参加中です。参加者が集まるまでお待ちください。「バトル開始」を押すとバトルが始まります。</p>
+                <p class="muted intro-note">あなたは「<strong style="color:var(--me)"><?= htmlspecialchars($currentName, ENT_QUOTES) ?></strong>」として参加中です。参加者が集まるまでお待ちください。誰かが「バトル開始」を押すとバトルが始まります。</p>
             <?php else: ?>
                 <form method="post" autocomplete="off">
                     <div class="join-inline">
@@ -540,46 +760,48 @@ $themes = $stThemes->fetchAll(PDO::FETCH_ASSOC);
                 <p class="muted">※ 同じグループ内で同名は使用できません。</p>
             <?php endif; ?>
 
-            <h3>出題テーマ</h3>
-            <?php if (!empty($themes)): ?>
-                <div class="theme-wrap">
-                    <?php foreach ($themes as $t): ?>
-                        <?php
-                        $path = sprintf(
-                            '%s / %s / %s',
-                            (string)($t['c1_title'] ?? '—'),
-                            (string)($t['c2_title'] ?? '—'),
-                            (string)($t['theme_title'] ?? '—')
-                        );
-                        ?>
-                        <span class="theme-chip">
-                            <small><?= (int)$t['cate1'] ?>-<?= (int)$t['cate2'] ?>-<?= (int)$t['qid'] ?></small>
-                            <?= htmlspecialchars($path, ENT_QUOTES, 'UTF-8') ?>
-                        </span>
-                    <?php endforeach; ?>
+            <div class="info-row">
+                <div class="info-label"><span class="label-desktop">出題テーマ</span><span class="label-mobile">テーマ</span></div>
+                <div class="info-value">
+                    <?php if (!empty($themes)): ?>
+                        <div class="theme-wrap">
+                            <?php foreach ($themes as $t): ?>
+                                <?php $themeTitle = (string)($t['theme_title'] ?? '—'); ?>
+                                <span class="theme-chip"><?= htmlspecialchars($themeTitle, ENT_QUOTES, 'UTF-8') ?></span>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php else: ?>
+                        <span class="muted">出題テーマは未選択です。</span>
+                    <?php endif; ?>
                 </div>
-            <?php else: ?>
-                <p class="muted">出題テーマは未選択です。</p>
-            <?php endif; ?>
+            </div>
 
-            <h3>現在の参加者（一覧）</h3>
-            <ul id="participant-list">
-                <?php if ($participants): ?>
-                    <?php foreach ($participants as $p): ?>
-                        <li<?= ($alreadyJoined && $p === $currentName) ? ' style="color:var(--me);font-weight:700"' : '' ?>>
-                            <?= htmlspecialchars($p, ENT_QUOTES) ?>
-                            </li>
+            <div class="info-row">
+                <div class="info-label"><span class="label-desktop">現在の参加者</span><span class="label-mobile">参加者</span></div>
+                <div id="participant-list" class="info-value" aria-live="polite">
+                    <?php if ($participants): ?>
+                        <?php foreach ($participants as $p): ?>
+                            <span class="participant-chip<?= ($alreadyJoined && $p === $currentName) ? ' me' : '' ?>">
+                                <?= htmlspecialchars($p, ENT_QUOTES) ?>
+                            </span>
                         <?php endforeach; ?>
                     <?php else: ?>
-                        <li>まだ参加者はいません。</li>
+                        <span class="muted">まだ参加者はいません。</span>
                     <?php endif; ?>
-            </ul>
+                </div>
+            </div>
 
-            <form method="get" action="ready.php" style="margin-top:12px;">
+            <form method="get" action="ready.php" class="start-form">
                 <input type="hidden" name="gid" value="<?= (int)$gid ?>">
                 <input type="hidden" name="bid" value="<?= (int)$bid ?>">
                 <input type="hidden" name="n" value="3">
-                <button class="space-button" type="submit" <?= $alreadyJoined ? '' : 'disabled' ?>>バトル開始</button>
+                <button
+                    id="startBattleBtn"
+                    class="qb-round-yellow-btn qb-round-yellow-btn--wide"
+                    type="submit"
+                    <?= ($alreadyJoined && $participantCount >= 2) ? '' : 'disabled' ?>>
+                    <?= ($participantCount >= 2) ? 'バトル開始' : '参加者待ち' ?>
+                </button>
             </form>
         </section>
 
@@ -590,17 +812,19 @@ $themes = $stThemes->fetchAll(PDO::FETCH_ASSOC);
     </main>
 
     <script>
-        const titleEl = document.getElementById('lobbyTitle');
+        const statusEl = document.getElementById('lobbyStatus');
         const cdEl = document.getElementById('countdown');
         const rootBid = <?= (int)$rootBid ?>;
         const prevBid = <?= (int)$prevBid ?>;
 
         function setLobbyMode(mode) {
-            if (!titleEl || !cdEl) return;
+            if (!statusEl || !cdEl) return;
             if (mode === 'countdown') {
-                titleEl.textContent = 'カウントダウン中';
+                statusEl.textContent = 'カウントダウン中';
+                statusEl.dataset.mode = 'countdown';
             } else {
-                titleEl.textContent = 'バトル開始待ち';
+                statusEl.textContent = 'バトル開始待ち';
+                statusEl.dataset.mode = 'wait';
                 cdEl.textContent = '';
             }
         }
@@ -608,17 +832,19 @@ $themes = $stThemes->fetchAll(PDO::FETCH_ASSOC);
         const bid = <?= (int)($_GET['bid'] ?? $bid ?? 0) ?>;
         const gid = <?= (int)($_GET['gid'] ?? $gid ?? 0) ?>;
         const myName = <?= json_encode($currentName ?? null, JSON_UNESCAPED_UNICODE) ?>;
+        const wsUrl = <?= json_encode(battle_ws_public_url(), JSON_UNESCAPED_SLASHES) ?>;
 
-        /* タイムアウト等（既存） */
-        const POLL_INTERVAL_MS = 1000;
+        /* タイムアウト等 */
         const INACTIVE_TIMEOUT_MS = 10 * 60 * 1000;
         const HIDDEN_TIMEOUT_MS = 2 * 60 * 1000;
         const FETCH_TIMEOUT_MS = 7000;
         let lastActivity = Date.now(),
             hiddenSince = null,
             stopped = false,
-            pollTimer = null,
             hbIv = null;
+        let fetchLobbySnapshot = () => {};
+        let connectLobbySocket = () => {};
+        let disconnectLobbySocket = () => {};
 
         function startHeartbeat() {
             if (hbIv) return;
@@ -627,7 +853,7 @@ $themes = $stThemes->fetchAll(PDO::FETCH_ASSOC);
                     cache: 'no-store',
                     credentials: 'same-origin'
                 });
-            }, 15000);
+            }, 30000);
         }
 
         function stopHeartbeat() {
@@ -668,11 +894,8 @@ $themes = $stThemes->fetchAll(PDO::FETCH_ASSOC);
 
         function stopPolling(reason) {
             stopped = true;
-            if (pollTimer) {
-                clearTimeout(pollTimer);
-                pollTimer = null;
-            }
             stopHeartbeat();
+            disconnectLobbySocket();
             SpriteEngine.pause();
             showPausedBanner(reason);
         }
@@ -682,8 +905,9 @@ $themes = $stThemes->fetchAll(PDO::FETCH_ASSOC);
             stopped = false;
             hidePausedBanner();
             SpriteEngine.resume();
-            poll();
             startHeartbeat();
+            fetchLobbySnapshot();
+            connectLobbySocket();
         }
         setInterval(() => {
             const now = Date.now();
@@ -864,8 +1088,18 @@ $themes = $stThemes->fetchAll(PDO::FETCH_ASSOC);
             let navigated = false,
                 countdownIv = null,
                 offset = 0,
-                offsetFixed = false;
+                offsetFixed = false,
+                lobbySocket = null,
+                reconnectTimer = null,
+                reconnectDelay = 1000,
+                snapshotIv = null;
             const now = () => Date.now() + offset;
+
+            function goReady() {
+                if (navigated) return;
+                navigated = true;
+                location.href = `ready.php?bid=${bid}&gid=${gid}`;
+            }
 
             function goStart() {
                 if (navigated) return;
@@ -874,27 +1108,61 @@ $themes = $stThemes->fetchAll(PDO::FETCH_ASSOC);
             }
 
             function renderParticipantsList(list) {
-                const ul = document.getElementById('participant-list');
-                if (!ul) return;
-                ul.innerHTML = '';
+                const box = document.getElementById('participant-list');
+                if (!box) return;
+                box.innerHTML = '';
                 if (!Array.isArray(list) || list.length === 0) {
-                    ul.innerHTML = '<li>まだ参加者はいません。</li>';
+                    box.innerHTML = '<span class="muted">まだ参加者はいません。</span>';
                     return;
                 }
                 for (const name of list) {
-                    const li = document.createElement('li');
-                    li.textContent = name;
+                    const chip = document.createElement('span');
+                    chip.className = 'participant-chip';
+                    chip.textContent = name;
                     if (myName && name === myName) {
-                        li.style.color = 'var(--me)';
-                        li.style.fontWeight = '700';
+                        chip.classList.add('me');
                     }
-                    ul.appendChild(li);
+                    box.appendChild(chip);
+                }
+            }
+
+            function syncStartButton(list) {
+                const btn = document.getElementById('startBattleBtn');
+                if (!btn) return;
+                const count = Array.isArray(list) ? list.length : 0;
+                const canStart = !!myName && count >= 2;
+                btn.disabled = !canStart;
+                btn.textContent = count >= 2 ? 'バトル開始' : '参加者待ち';
+            }
+
+            function applyLobbySnapshot(res) {
+                if (typeof res?.now === 'number' && !offsetFixed) {
+                    offset = res.now - Date.now();
+                    offsetFixed = true;
+                } else if (typeof res?.now === 'number') {
+                    offset = res.now - Date.now();
+                }
+
+                renderParticipantsList(res.participants || []);
+                syncStartButton(res.participants || []);
+                updateGalaxy(res.avatars || [], myName);
+
+                if (res.started && typeof res.start_at === 'number') {
+                    const remain = res.start_at - now();
+                    if (res.phase === 0 && remain > 0) {
+                        goReady();
+                    } else {
+                        goStart();
+                    }
+                } else {
+                    setLobbyMode('wait');
                 }
             }
 
             function startCountdown(startAtMs) {
                 const el = document.getElementById('countdown');
-                if (!el || countdownIv) return;
+                if (!el) return;
+                if (countdownIv) clearInterval(countdownIv);
                 setLobbyMode('countdown');
                 countdownIv = setInterval(() => {
                     const remainSec = Math.ceil((startAtMs - now()) / 1000);
@@ -909,8 +1177,8 @@ $themes = $stThemes->fetchAll(PDO::FETCH_ASSOC);
                 }, 200);
             }
 
-            async function poll() {
-                if (stopped) return;
+            fetchLobbySnapshot = async function() {
+                if (stopped || navigated) return;
                 try {
                     const ctrl = new AbortController();
                     const t = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
@@ -921,39 +1189,95 @@ $themes = $stThemes->fetchAll(PDO::FETCH_ASSOC);
                             signal: ctrl.signal
                         }
                     ).then(r => r.json()).finally(() => clearTimeout(t));
-
-                    if (typeof res.now === 'number' && !offsetFixed) {
-                        offset = res.now - Date.now();
-                        offsetFixed = true;
-                    }
-
-                    renderParticipantsList(res.participants || []);
-                    updateGalaxy(res.avatars || [], myName); // 銀河は avatars のみ
-
-                    if (res.started && typeof res.start_at === 'number') {
-                        const remain = res.start_at - now();
-                        if (res.phase === 0 && remain > 0) {
-                            startCountdown(res.start_at);
-                        } else {
-                            goStart();
-                            return;
-                        }
-                    } else {
-                        setLobbyMode('wait');
-                    }
+                    applyLobbySnapshot(res);
                 } catch (_) {
-                    /* retry next tick */
+                    /* ignore */
+                }
+            };
+
+            function startLobbySnapshotPolling() {
+                if (snapshotIv) return;
+                snapshotIv = setInterval(() => {
+                    fetchLobbySnapshot();
+                }, 1500);
+            }
+
+            function stopLobbySnapshotPolling() {
+                if (!snapshotIv) return;
+                clearInterval(snapshotIv);
+                snapshotIv = null;
+            }
+
+            function scheduleReconnect() {
+                if (reconnectTimer || stopped || navigated || !wsUrl) return;
+                reconnectTimer = setTimeout(() => {
+                    reconnectTimer = null;
+                    connectLobbySocket();
+                }, reconnectDelay);
+                reconnectDelay = Math.min(reconnectDelay * 2, 10000);
+            }
+
+            connectLobbySocket = function() {
+                if (stopped || navigated || !wsUrl) return;
+                if (lobbySocket && (lobbySocket.readyState === WebSocket.OPEN || lobbySocket.readyState === WebSocket.CONNECTING)) {
+                    return;
                 }
 
-                if (!navigated && !stopped) {
-                    pollTimer = setTimeout(poll, POLL_INTERVAL_MS);
+                lobbySocket = new WebSocket(wsUrl);
+                lobbySocket.addEventListener('open', () => {
+                    reconnectDelay = 1000;
+                    lobbySocket.send(JSON.stringify({
+                        type: 'subscribe',
+                        rooms: [`lobby:${bid}:${gid}`]
+                    }));
+                });
+
+                lobbySocket.addEventListener('message', ev => {
+                    try {
+                        const msg = JSON.parse(ev.data);
+                        const event = String(msg?.event || '');
+                        if (event === 'lobby.snapshot' && msg.payload) {
+                            applyLobbySnapshot(msg.payload);
+                        } else if (event === 'battle.state') {
+                            fetchLobbySnapshot();
+                        }
+                    } catch (_) {
+                        /* ignore */
+                    }
+                });
+
+                lobbySocket.addEventListener('close', () => {
+                    scheduleReconnect();
+                });
+
+                lobbySocket.addEventListener('error', () => {
+                    try {
+                        lobbySocket.close();
+                    } catch (_) {}
+                });
+            };
+
+            disconnectLobbySocket = function() {
+                stopLobbySnapshotPolling();
+                if (reconnectTimer) {
+                    clearTimeout(reconnectTimer);
+                    reconnectTimer = null;
                 }
-            }
+                reconnectDelay = 1000;
+                if (lobbySocket) {
+                    try {
+                        lobbySocket.close();
+                    } catch (_) {}
+                    lobbySocket = null;
+                }
+            };
 
             // 初期描画：サーバ決定済みのみ表示
             updateGalaxy(<?= json_encode($initialAvatars, JSON_UNESCAPED_UNICODE) ?>, myName);
             startHeartbeat();
-            poll();
+            fetchLobbySnapshot();
+            startLobbySnapshotPolling();
+            connectLobbySocket();
         })();
         // --- FIX END ---
     </script>

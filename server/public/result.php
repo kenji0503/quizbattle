@@ -47,11 +47,25 @@ if (!$isFinished) {
     exit;
 }
 
+function format_elapsed_hundredths(?int $elapsedMs): string
+{
+    if ($elapsedMs === null || $elapsedMs < 0) {
+        return '—';
+    }
+    return number_format($elapsedMs / 1000, 2, '.', '') . '秒';
+}
+
 // 3問（bnum=1..3）を取得
+$lineupHasSchedule = battle_has_lineup_schedule_columns($pdo);
+$scheduleSelect = $lineupHasSchedule
+    ? ', l.q_start_at_ms, l.reveal_at_ms, l.switch_at_ms'
+    : ', 0 AS q_start_at_ms, 0 AS reveal_at_ms, 0 AS switch_at_ms';
+
 $qStmt = $pdo->prepare("
    SELECT
      l.order_no AS bnum, l.cate1, l.cate2, l.id, l.num,
      m.mondai, m.kaito, m.qa, m.qb, m.qc, m.qd
+     {$scheduleSelect}
    FROM qb_battle_lineup l
    JOIN qb_question_bank m
      ON m.cate1=l.cate1 AND m.cate2=l.cate2 AND m.qid=l.id AND m.qnum=l.num AND m.del=0
@@ -65,9 +79,20 @@ if (!$questions) {
     die('このバトルには問題がありません。');
 }
 
+// 参加者一覧（未回答者も結果へ出す）
+$pStmt = $pdo->prepare("
+  SELECT uid, name
+    FROM qb_battle_participants
+   WHERE bid = :bid AND gid = :gid
+   ORDER BY joined_at ASC, participant_id ASC
+");
+$pStmt->execute([':bid' => $bid, ':gid' => $gid]);
+$participantRows = $pStmt->fetchAll(PDO::FETCH_ASSOC);
+
 // 参加者の解答（全問分）
 $bStmt = $pdo->prepare("
   SELECT b.uid, b.cate1, b.cate2, b.id, b.num, b.sentaku, b.buzzed_at,
+         CAST(ROUND(UNIX_TIMESTAMP(b.buzzed_at) * 1000) AS SIGNED) AS buzzed_at_ms,
          COALESCE(p.name, CONCAT('Player#', b.uid)) AS name
   FROM qb_buzzes b
   LEFT JOIN qb_battle_participants p
@@ -125,8 +150,16 @@ foreach ($questions as $q) {
 
 // 集計用
 $users = [];        // uid => name
-$perUser = [];      // uid => ['correct'=>0,'first'=>0,'pos_sum'=>0]
-$matrix  = [];      // uid => [bnum => ['ok'=>bool, 'pos'=>int] ]
+$perUser = [];      // uid => ['correct'=>0,'first'=>0,'pos_sum'=>0,'elapsed_sum'=>0,'elapsed_count'=>0]
+$perQuestionByUser = []; // uid => [bnum => ['answer'=>..., 'ok'=>..., 'elapsed_ms'=>..., 'pos'=>...]]
+
+foreach ($participantRows as $participantRow) {
+    $participantUid = (int)$participantRow['uid'];
+    $participantName = (string)($participantRow['name'] ?? '');
+    if ($participantUid > 0 && $participantName !== '' && !isset($users[$participantUid])) {
+        $users[$participantUid] = $participantName;
+    }
+}
 
 // 問題ごとに並び順をつけて採点
 $grouped = []; // key => [rows...]
@@ -144,6 +177,7 @@ foreach ($grouped as $key => $rows) {
 
     $bnum  = (int)$qByKey[$key]['bnum'];
     $kaito = (string)$qByKey[$key]['kaito']; // 仕様どおり 'A'|'B'|'C'|'D' が入る前提
+    $qStartAtMs = (int)($qByKey[$key]['q_start_at_ms'] ?? 0);
 
     // uidごとに「最初の押し（順位用）」と「最後の選択（採点用）」を抽出
     $firstByUid = []; // uid => 最初に押した行
@@ -174,12 +208,13 @@ foreach ($grouped as $key => $rows) {
         // 採点は「最終選択」か「最初の選択」をスイッチ
         $ans = $USE_FINAL_ANSWER ? (string)$lastByUid[$uid]['sentaku'] : (string)$rFirst['sentaku'];
         $ok  = ($ans === $kaito); // A/B/C/D 同士の厳密比較のみ
-
-        // マトリクス（この問題について1回だけ記録）
-        $matrix[$uid][$bnum] = ['ok' => $ok, 'pos' => $pos];
+        $buzzedAtMs = isset($rFirst['buzzed_at_ms']) ? (int)$rFirst['buzzed_at_ms'] : null;
+        $elapsedMs = ($qStartAtMs > 0 && $buzzedAtMs !== null) ? max(0, $buzzedAtMs - $qStartAtMs) : null;
 
         // 個人集計（この問題について1回だけ）
-        if (!isset($perUser[$uid])) $perUser[$uid] = ['correct' => 0, 'first' => 0, 'pos_sum' => 0];
+        if (!isset($perUser[$uid])) {
+            $perUser[$uid] = ['correct' => 0, 'first' => 0, 'pos_sum' => 0, 'elapsed_sum' => 0, 'elapsed_count' => 0];
+        }
         if ($ok) {
             $perUser[$uid]['correct']++;
             if (!$firstCorrectAwarded) {
@@ -188,6 +223,16 @@ foreach ($grouped as $key => $rows) {
             }
         }
         $perUser[$uid]['pos_sum'] += $pos;
+        if ($elapsedMs !== null) {
+            $perUser[$uid]['elapsed_sum'] += $elapsedMs;
+            $perUser[$uid]['elapsed_count']++;
+        }
+        $perQuestionByUser[$uid][$bnum] = [
+            'answer' => $ans,
+            'ok' => $ok,
+            'elapsed_ms' => $elapsedMs,
+            'pos' => $pos,
+        ];
     }
 }
 
@@ -200,7 +245,18 @@ foreach ($users as $uid => $name) {
     $c = $perUser[$uid]['correct'] ?? 0;
     $f = $perUser[$uid]['first']   ?? 0;
     $s = $perUser[$uid]['pos_sum'] ?? 0;
-    $rank[] = ['uid' => $uid, 'name' => $name, 'correct' => $c, 'first' => $f, 'pos_sum' => $s];
+    $elapsedSum = $perUser[$uid]['elapsed_sum'] ?? 0;
+    $elapsedCount = $perUser[$uid]['elapsed_count'] ?? 0;
+    $avgElapsedMs = $elapsedCount > 0 ? (int)round($elapsedSum / $elapsedCount) : null;
+    $rank[] = [
+        'uid' => $uid,
+        'name' => $name,
+        'correct' => $c,
+        'first' => $f,
+        'pos_sum' => $s,
+        'avg_elapsed_ms' => $avgElapsedMs,
+        'avg_elapsed_label' => format_elapsed_hundredths($avgElapsedMs),
+    ];
 }
 usort($rank, function ($a, $b) {
     if ($a['correct'] !== $b['correct']) return ($b['correct'] - $a['correct']); // desc
@@ -217,6 +273,44 @@ foreach ($rank as $i => $row) {
         $myRank = $i + 1;
         break;
     }
+}
+
+$selfResults = [];
+foreach ($questions as $q) {
+    $bnum = (int)$q['bnum'];
+    $detail = $perQuestionByUser[$selfUid][$bnum] ?? null;
+    $answerLabel = $detail['answer'] ?? '';
+    switch ($answerLabel) {
+        case 'A':
+            $answerText = (string)($q['qa'] ?? '');
+            break;
+        case 'B':
+            $answerText = (string)($q['qb'] ?? '');
+            break;
+        case 'C':
+            $answerText = (string)($q['qc'] ?? '');
+            break;
+        case 'D':
+            $answerText = (string)($q['qd'] ?? '');
+            break;
+        default:
+            $answerText = '未回答';
+            break;
+    }
+
+    $selfResults[] = [
+        'bnum' => $bnum,
+        'cate1' => (int)$q['cate1'],
+        'cate2' => (int)$q['cate2'],
+        'id' => (int)$q['id'],
+        'num' => (int)$q['num'],
+        'mondai' => (string)$q['mondai'],
+        'answer_label' => $answerLabel,
+        'answer_text' => $answerText,
+        'judge' => $detail ? (($detail['ok'] ?? false) ? '〇' : '×') : '—',
+        'judge_class' => $detail ? (($detail['ok'] ?? false) ? 'ok' : 'ng') : 'muted',
+        'elapsed_label' => format_elapsed_hundredths($detail['elapsed_ms'] ?? null),
+    ];
 }
 
 $log->debug('[RESULT_SUMMARY] ' . json_encode($rank, JSON_UNESCAPED_UNICODE));
@@ -236,6 +330,7 @@ $__noticeMessage = (isset($_GET['notice']) && $_GET['notice'] === 'ended')
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>結果発表</title>
     <link rel="stylesheet" href="css/battle.css">
+    <link rel="stylesheet" href="css/ui-common.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" rel="stylesheet">
     <style>
         .container {
@@ -294,9 +389,38 @@ $__noticeMessage = (isset($_GET['notice']) && $_GET['notice'] === 'ended')
             color: #bbb;
         }
 
+        .matrix-mark {
+            display: inline-block;
+        }
+
+        .matrix-time {
+            display: block;
+            margin-top: 4px;
+            font-size: .82rem;
+            font-weight: 700;
+            color: #d9e2f4;
+        }
+
         .big {
             font-size: 1.6rem;
             font-weight: 800;
+        }
+
+        .pc-only {
+            display: inline;
+        }
+
+        .mobile-only {
+            display: none;
+        }
+
+        .desktop-table {
+            display: table;
+            width: 100%;
+        }
+
+        .mobile-card-list {
+            display: none;
         }
 
         .btn {
@@ -307,6 +431,131 @@ $__noticeMessage = (isset($_GET['notice']) && $_GET['notice'] === 'ended')
             color: #000;
             border-radius: 6px;
             text-decoration: none;
+        }
+
+        .rank-mark-col {
+            width: 44px;
+            padding-left: 6px;
+            padding-right: 6px;
+        }
+
+        .rank-mark-cell {
+            width: 44px;
+            text-align: center;
+        }
+
+        .rank-crown {
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            object-fit: contain;
+            vertical-align: middle;
+        }
+
+        .mobile-result-card {
+            background: #232345;
+            border: 1px solid rgba(255, 255, 255, .12);
+            border-radius: 14px;
+            padding: 12px;
+            margin-bottom: 10px;
+        }
+
+        .mobile-rank-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .mobile-rank-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 1.6rem;
+            font-weight: 900;
+            color: #fff;
+        }
+
+        .mobile-rank-stats {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+        }
+
+        .mobile-stat {
+            border-radius: 10px;
+            background: rgba(255, 255, 255, .06);
+            padding: 8px 10px;
+            text-align: left;
+        }
+
+        .mobile-stat-label {
+            display: block;
+            color: #cfd7e7;
+            font-size: 1.1rem;
+            margin-bottom: 4px;
+        }
+
+        .mobile-stat-value {
+            display: block;
+            color: #fff;
+            font-size: 1.4rem;
+            font-weight: 800;
+        }
+
+        .mobile-history-card {
+            background: #232345;
+            border: 1px solid rgba(255, 255, 255, .12);
+            border-radius: 14px;
+            padding: 12px;
+            margin-bottom: 12px;
+        }
+
+        .mobile-history-card.ok {
+            background: linear-gradient(180deg, rgba(42, 99, 180, .5), rgba(24, 42, 88, .92));
+            border-color: rgba(116, 183, 255, .48);
+        }
+
+        .mobile-history-card.ng {
+            background: linear-gradient(180deg, rgba(173, 54, 72, .48), rgba(89, 24, 37, .92));
+            border-color: rgba(255, 138, 157, .42);
+        }
+
+        .mobile-history-card.muted {
+            background: #232345;
+        }
+
+        .mobile-history-head {
+            font-size: 1.6rem;
+            font-weight: 900;
+            color: #fff;
+            margin-bottom: 10px;
+        }
+
+        .mobile-history-question {
+            color: #fff;
+            line-height: 1.6;
+            margin-bottom: 10px;
+        }
+
+        .mobile-history-grid {
+            display: grid;
+            grid-template-columns: 88px minmax(0, 1fr);
+            gap: 8px 10px;
+            align-items: start;
+        }
+
+        .mobile-history-label {
+            color: #cfd7e7;
+            font-weight: 700;
+            text-align: left;
+        }
+
+        .mobile-history-value {
+            color: #fff;
+            text-align: left;
+            word-break: break-word;
         }
 
         /* 問題の評価用 */
@@ -358,6 +607,53 @@ $__noticeMessage = (isset($_GET['notice']) && $_GET['notice'] === 'ended')
             cursor: default;
         }
 
+        .participant-row {
+            grid-template-columns: 4.6rem 1fr auto;
+        }
+
+        .participant-row.is-self {
+            border-color: rgba(105, 240, 255, .42);
+            box-shadow: 0 0 0 1px rgba(105, 240, 255, .18) inset;
+        }
+
+        .participant-name {
+            font-size: 1.9rem;
+            font-weight: 800;
+            color: #fff;
+        }
+
+        .participant-meta {
+            margin-top: 6px;
+            color: #d8dfef;
+            font-size: 1.4rem;
+            line-height: 1.7;
+        }
+
+        .participant-stats {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+
+        .participant-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            min-width: 120px;
+            padding: 8px 12px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, .14);
+            background: rgba(255, 255, 255, .08);
+            color: #fff;
+            font-weight: 800;
+            justify-content: center;
+        }
+
+        .participant-pill strong {
+            color: #ffd86b;
+            font-size: 1.45rem;
+        }
 
         /* 狭い画面ではボタンを縦積み＋幅いっぱいに */
         @media (max-width: 640px) {
@@ -385,6 +681,16 @@ $__noticeMessage = (isset($_GET['notice']) && $_GET['notice'] === 'ended')
                 margin-left: 0;
                 /* 既存の margin-left を打ち消し */
             }
+
+            .participant-row {
+                grid-template-columns: 4.2rem 1fr;
+            }
+
+            .participant-stats {
+                grid-column: 1 / -1;
+                justify-content: flex-start;
+                margin-top: 8px;
+            }
         }
 
 
@@ -392,6 +698,50 @@ $__noticeMessage = (isset($_GET['notice']) && $_GET['notice'] === 'ended')
             font-size: .9rem;
             color: #bbb;
             margin: 6px 0 0;
+        }
+
+        .history-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0 10px;
+        }
+
+        .history-table th,
+        .history-table td {
+            border: none;
+        }
+
+        .history-row td {
+            background: #232345;
+            vertical-align: middle;
+        }
+
+        .history-row td:first-child {
+            border-radius: 10px 0 0 10px;
+        }
+
+        .history-row td:last-child {
+            border-radius: 0 10px 10px 0;
+        }
+
+        .history-table .rate-actions {
+            display: flex;
+            justify-content: center;
+            gap: .4rem;
+            flex-wrap: wrap;
+        }
+
+        .mobile-history-card .rate-actions {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+        }
+
+        .mobile-history-card .rate-actions .vote-btn {
+            margin-left: 0;
+            min-width: 0;
+            justify-content: center;
+            width: 100%;
         }
 
         /* 正解表示 */
@@ -578,6 +928,36 @@ $__noticeMessage = (isset($_GET['notice']) && $_GET['notice'] === 'ended')
         .score-head {
             animation: popIn .5s ease-out
         }
+
+        @media (max-width: 640px) {
+            .pc-only {
+                display: none;
+            }
+
+            .mobile-only {
+                display: inline;
+            }
+
+            .desktop-table {
+                display: none;
+            }
+
+            .mobile-card-list {
+                display: block;
+            }
+
+            .history-table {
+                display: none;
+            }
+
+            .rate-actions .vote-btn {
+                margin-left: 0;
+            }
+
+            .mobile-history-grid {
+                grid-template-columns: 72px minmax(0, 1fr);
+            }
+        }
     </style>
 
 </head>
@@ -615,17 +995,24 @@ $__noticeMessage = (isset($_GET['notice']) && $_GET['notice'] === 'ended')
                 <?= htmlspecialchars($__noticeMessage, ENT_QUOTES, 'UTF-8') ?>
             </div>
         <?php endif; ?>
-        <!-- リーダーボード -->
+        <!-- 順位 -->
         <div class="card">
-            <h2>リーダーボード</h2>
-            <table>
+            <h2>順位</h2>
+            <table class="desktop-table">
+                <colgroup>
+                    <col style="width: 44px;">
+                    <col style="width: 9%;">
+                    <col style="width: 39%;">
+                    <col style="width: 18%;">
+                    <col style="width: 24%;">
+                </colgroup>
                 <thead>
                     <tr>
+                        <th class="rank-mark-col" aria-hidden="true"></th>
                         <th>順位</th>
                         <th>名前</th>
-                        <th>正解</th>
-                        <th>早押</th>
-                        <th>早押合計</th>
+                        <th><span class="pc-only">正解数</span><span class="mobile-only">正解</span></th>
+                        <th>平均時間</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -636,119 +1023,152 @@ $__noticeMessage = (isset($_GET['notice']) && $_GET['notice'] === 'ended')
                     <?php else: ?>
                         <?php foreach ($rank as $i => $row): ?>
                             <tr class="<?= $row['uid'] === $selfUid ? 'uid' : '' ?>"> <!-- ← $uid → $selfUid -->
+                                <td class="rank-mark-cell">
+                                    <?php if ($i === 0): ?>
+                                        <img class="rank-crown" src="images/icon/king.png" alt="1位">
+                                    <?php endif; ?>
+                                </td>
                                 <td><?= $i + 1 ?></td>
                                 <td><?= htmlspecialchars($row['name'], ENT_QUOTES, 'UTF-8') ?></td>
                                 <td><?= (int)$row['correct'] ?></td>
-                                <td><?= (int)$row['first'] ?></td>
-                                <td><?= (int)$row['pos_sum'] ?></td>
+                                <td><?= htmlspecialchars($row['avg_elapsed_label'], ENT_QUOTES, 'UTF-8') ?></td>
                             </tr>
                         <?php endforeach; ?>
                     <?php endif; ?>
                 </tbody>
             </table>
-        </div>
-
-        <!-- 回答マトリクス -->
-        <div class="card">
-            <h2>回答マトリクス</h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th>参加者</th>
-                        <?php for ($b = 1; $b <= count($questions); $b++): ?>
-                            <th>Q<?= $b ?></th>
-                        <?php endfor; ?>
-                        <th>合計</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($rank as $row): $rowUid = (int)$row['uid']; ?>
-                        <tr class="<?= ($rowUid === $selfUid) ? 'uid' : '' ?>"> <!-- ← $uid → $selfUid -->
-                            <td style="text-align:left;"><?= htmlspecialchars($row['name'], ENT_QUOTES, 'UTF-8') ?></td>
-                            <?php for ($b = 1; $b <= count($questions); $b++): ?>
-                                <?php
-                                $cell = $matrix[$rowUid][$b] ?? null;
-                                if (!$cell) {
-                                    $txt = '–';
-                                    $cls = 'muted';
-                                } else {
-                                    $txt = ($cell['ok'] ? '<i class="far fa-circle" aria-label="正解"></i>' : '<i class="fas fa-times" aria-label="不正解"></i>') . " （{$cell['pos']}）";
-                                    $cls = $cell['ok'] ? 'ok' : 'ng';
-                                }
-                                ?>
-                                <td class="<?= $cls ?>"><?= $txt ?></td>
-                            <?php endfor; ?>
-                            <td><?= (int)$row['correct'] ?></td>
-                        </tr>
+            <div class="mobile-card-list">
+                <?php if (empty($rank)): ?>
+                    <div class="muted">まだ解答がありません</div>
+                <?php else: ?>
+                    <?php foreach ($rank as $i => $row): ?>
+                        <div class="mobile-result-card<?= $row['uid'] === $selfUid ? ' uid' : '' ?>">
+                            <div class="mobile-rank-head">
+                                <div class="mobile-rank-title">
+                                    <?php if ($i === 0): ?>
+                                        <img class="rank-crown" src="images/icon/king.png" alt="1位">
+                                    <?php endif; ?>
+                                    <span><?= $i + 1 ?>位 <?= htmlspecialchars($row['name'], ENT_QUOTES, 'UTF-8') ?></span>
+                                </div>
+                            </div>
+                            <div class="mobile-rank-stats">
+                                <div class="mobile-stat">
+                                    <span class="mobile-stat-label">正解数</span>
+                                    <span class="mobile-stat-value"><?= (int)$row['correct'] ?></span>
+                                </div>
+                                <div class="mobile-stat">
+                                    <span class="mobile-stat-label">平均時間</span>
+                                    <span class="mobile-stat-value"><?= htmlspecialchars($row['avg_elapsed_label'], ENT_QUOTES, 'UTF-8') ?></span>
+                                </div>
+                            </div>
+                        </div>
                     <?php endforeach; ?>
-
-                    <?php if (empty($rank)): ?>
-                        <tr>
-                            <td colspan="<?= 2 + count($questions) ?>" class="muted">参加者の解答がありません</td>
-                        </tr>
-                    <?php endif; ?>
-                </tbody>
-            </table>
+                <?php endif; ?>
+            </div>
         </div>
 
         <?php if ($__noticeMessage === null): ?>
-            <div style="text-align:center; margin-bottom: 40px;">
-                <a class="btn" href="rematch.php?gid=<?= (int)$gid ?>&prev=<?= (int)$bid ?>">
+            <div style="text-align:center; margin-bottom: 28px;">
+                <a class="qb-round-yellow-btn" href="rematch.php?gid=<?= (int)$gid ?>&prev=<?= (int)$bid ?>">
                     もう1回！
                 </a>
             </div>
         <?php endif; ?>
 
-        <!-- ★ 問題の評価一覧（正解付き） -->
         <div class="card">
-            <h2>問題の評価一覧（このバトルで出題された3問）</h2>
-            <div id="rateList">
-                <?php foreach ($questions as $idx => $q): ?>
-                    <?php
-                    // 正解テキストを決定
-                    $ansLabel = (string)($q['kaito'] ?? '');
-                    switch ($ansLabel) {
-                        case 'A':
-                            $ansText = $q['qa'] ?? '';
-                            break;
-                        case 'B':
-                            $ansText = $q['qb'] ?? '';
-                            break;
-                        case 'C':
-                            $ansText = $q['qc'] ?? '';
-                            break;
-                        case 'D':
-                            $ansText = $q['qd'] ?? '';
-                            break;
-                        default:
-                            $ansText = '';
-                            break;
-                    }
-                    ?>
-                    <div class="rate-row"
-                        data-cate1="<?= (int)$q['cate1'] ?>"
-                        data-cate2="<?= (int)$q['cate2'] ?>"
-                        data-id="<?= (int)$q['id'] ?>"
-                        data-num="<?= (int)$q['num'] ?>">
-                        <div class="rate-idx">Q<?= (int)$q['bnum'] ?></div>
-                        <div class="rate-q">
-                            <?= htmlspecialchars($q['mondai'], ENT_QUOTES, 'UTF-8') ?>
-                            <div class="rate-ans">
-                                正解：
-                                <span class="pill"><?= htmlspecialchars($ansLabel, ENT_QUOTES, 'UTF-8') ?></span>
-                                <?= htmlspecialchars($ansText, ENT_QUOTES, 'UTF-8') ?>
+            <h2>履歴</h2>
+            <table class="history-table">
+                <colgroup>
+                    <col style="width: 8%;">
+                    <col style="width: 40%;">
+                    <col style="width: 22%;">
+                    <col style="width: 12%;">
+                    <col style="width: 18%;">
+                </colgroup>
+                <thead>
+                    <tr>
+                        <th>Q</th>
+                        <th>問題</th>
+                        <th>選択肢</th>
+                        <th>判定</th>
+                        <th>評価</th>
+                    </tr>
+                </thead>
+                <tbody id="rateList">
+                <?php if (empty($selfResults)): ?>
+                    <tr>
+                        <td colspan="5" class="muted">履歴データがありません</td>
+                    </tr>
+                <?php else: ?>
+                    <?php foreach ($selfResults as $result): ?>
+                        <tr class="history-row"
+                            data-cate1="<?= (int)$result['cate1'] ?>"
+                            data-cate2="<?= (int)$result['cate2'] ?>"
+                            data-id="<?= (int)$result['id'] ?>"
+                            data-num="<?= (int)$result['num'] ?>">
+                            <td>Q<?= (int)$result['bnum'] ?></td>
+                            <td style="text-align:left;"><?= htmlspecialchars($result['mondai'], ENT_QUOTES, 'UTF-8') ?></td>
+                            <td style="text-align:left;">
+                                <?php if ($result['answer_label'] !== ''): ?>
+                                    <span class="pill"><?= htmlspecialchars($result['answer_label'], ENT_QUOTES, 'UTF-8') ?></span>
+                                <?php endif; ?>
+                                <?= htmlspecialchars($result['answer_text'], ENT_QUOTES, 'UTF-8') ?>
+                            </td>
+                            <td class="<?= htmlspecialchars($result['judge_class'], ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($result['judge'], ENT_QUOTES, 'UTF-8') ?></td>
+                            <td>
+                                <div class="rate-actions">
+                                    <button class="vote-btn vote-good" type="button" aria-label="Good">
+                                        <i class="fas fa-thumbs-up"></i> 良い
+                                    </button>
+                                    <button class="vote-btn vote-bad" type="button" aria-label="Bad">
+                                        <i class="fas fa-thumbs-down"></i> 悪い
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+                </tbody>
+            </table>
+            <div class="mobile-card-list" data-rate-list>
+                <?php if (empty($selfResults)): ?>
+                    <div class="muted">履歴データがありません</div>
+                <?php else: ?>
+                    <?php foreach ($selfResults as $result): ?>
+                        <div class="mobile-history-card <?= htmlspecialchars($result['judge_class'], ENT_QUOTES, 'UTF-8') ?>"
+                            data-cate1="<?= (int)$result['cate1'] ?>"
+                            data-cate2="<?= (int)$result['cate2'] ?>"
+                            data-id="<?= (int)$result['id'] ?>"
+                            data-num="<?= (int)$result['num'] ?>">
+                            <div class="mobile-history-head">Q<?= (int)$result['bnum'] ?></div>
+                            <div class="mobile-history-question"><?= htmlspecialchars($result['mondai'], ENT_QUOTES, 'UTF-8') ?></div>
+                            <div class="mobile-history-grid">
+                                <div class="mobile-history-label">選択肢</div>
+                                <div class="mobile-history-value">
+                                    <?php if ($result['answer_label'] !== ''): ?>
+                                        <span class="pill"><?= htmlspecialchars($result['answer_label'], ENT_QUOTES, 'UTF-8') ?></span>
+                                    <?php endif; ?>
+                                    <?= htmlspecialchars($result['answer_text'], ENT_QUOTES, 'UTF-8') ?>
+                                </div>
+                                <div class="mobile-history-label">判定</div>
+                                <div class="mobile-history-value <?= htmlspecialchars($result['judge_class'], ENT_QUOTES, 'UTF-8') ?>">
+                                    <?= htmlspecialchars($result['judge'], ENT_QUOTES, 'UTF-8') ?>
+                                </div>
+                                <div class="mobile-history-label">評価</div>
+                                <div class="mobile-history-value">
+                                    <div class="rate-actions">
+                                        <button class="vote-btn vote-good" type="button" aria-label="Good">
+                                            <i class="fas fa-thumbs-up"></i> 良い
+                                        </button>
+                                        <button class="vote-btn vote-bad" type="button" aria-label="Bad">
+                                            <i class="fas fa-thumbs-down"></i> 悪い
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                        <div class="rate-actions">
-                            <button class="vote-btn vote-good" type="button" aria-label="Good">
-                                <i class="fas fa-thumbs-up"></i> Good
-                            </button>
-                            <button class="vote-btn vote-bad" type="button" aria-label="Bad">
-                                <i class="fas fa-thumbs-down"></i> Bad
-                            </button>
-                        </div>
-                    </div>
-                <?php endforeach; ?>
+                    <?php endforeach; ?>
+                <?php endif; ?>
             </div>
             <p class="rate-note">
                 ※ 評価を押して頂けると問題の調査を行います。
@@ -759,14 +1179,11 @@ $__noticeMessage = (isset($_GET['notice']) && $_GET['notice'] === 'ended')
     <script>
         /* ★ 追加: Good/Bad 投票 */
         (function() {
-            const container = document.getElementById('rateList');
-            if (!container) return;
-
-            container.addEventListener('click', async (ev) => {
+            document.addEventListener('click', async (ev) => {
                 const btn = ev.target.closest('.vote-btn');
                 if (!btn) return;
 
-                const row = ev.target.closest('.rate-row');
+                const row = ev.target.closest('.history-row, .mobile-history-card');
                 if (!row) return;
 
                 const action = btn.classList.contains('vote-good') ? 'good' : 'bad';
